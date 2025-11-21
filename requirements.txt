@@ -21,3 +21,4 @@ openai==1.35.3
 marshmallow==3.21.3
 environs==9.5.0
 biopython==1.81
+pdfplumber==0.11.0
