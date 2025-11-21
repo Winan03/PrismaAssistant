@@ -1,0 +1,8 @@
+# Archivo .gitignore
+venv/
+__pycache__/
+.env
+chroma_db/
+logs/
+.cache/
+*.pyc

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resultados PRISMA - UPAO</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+
+    .hero-gradient {
+      background: linear-gradient(135deg, #0f766e 0%, #1e40af 50%, #6d28d9 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .prose {
+      max-width: none;
+      line-height: 1.8;
+    }
+    .prose h2 { 
+      font-size: 1.5rem; 
+      font-weight: 700; 
+      color: #1f2937; 
+      margin-top: 2em; 
+      margin-bottom: 0.75em; 
+    }
+    .prose h3 { 
+      font-size: 1.25rem; 
+      font-weight: 600; 
+      color: #374151; 
+      margin-top: 1.5em; 
+      margin-bottom: 0.5em; 
+    }
+    .prose p { margin: 1em 0; color: #4b5563; }
+    .prose ul, .prose ol { margin: 1em 0; padding-left: 1.5em; }
+    .prose li { margin: 0.5em 0; }
+    
+    .paper-card {
+      transition: all 0.3s ease;
+    }
+    .paper-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    }
+
+    .relevance-badge {
+      font-size: 0.85rem;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .relevance-high { background: #d1fae5; color: #065f46; border: 2px solid #10b981; }
+    .relevance-medium { background: #fef3c7; color: #92400e; border: 2px solid #f59e0b; }
+    .relevance-low { background: #fee2e2; color: #991b1b; border: 2px solid #ef4444; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-emerald-50 via-teal-50 to-indigo-50 min-h-screen">
+
+  <!-- Hero -->
+  <div class="hero-gradient py-16 relative">
+    <div class="container mx-auto px-6 max-w-7xl text-center text-white">
+      <div class="inline-flex items-center justify-center w-24 h-24 bg-white/20 rounded-full mb-6 backdrop-blur-md">
+        <i class="fas fa-trophy text-5xl text-emerald-400"></i>
+      </div>
+      <h1 class="text-5xl md:text-6xl font-bold mb-4">
+        ¡Revisión PRISMA Completada!
+      </h1>
+      <p class="text-xl md:text-2xl text-white/90 max-w-3xl mx-auto">
+        {{ metrics.final_included }} artículos incluidos tras análisis sistemático
+      </p>
+    </div>
+  </div>
+
+  <div class="container mx-auto px-6 max-w-7xl -mt-12 relative z-10 pb-20">
+
+    <!-- Métricas principales -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-5 mb-10">
+      <div class="bg-white rounded-2xl p-6 border-t-4 border-emerald-500 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <i class="fas fa-search text-3xl text-emerald-500"></i>
+          <span class="text-xs font-medium text-gray-500 uppercase">Encontrados</span>
+        </div>
+        <div class="text-4xl font-bold text-gray-900">{{ metrics.total }}</div>
+        <div class="text-xs text-gray-500 mt-1">Artículos totales</div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-6 border-t-4 border-teal-500 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <i class="fas fa-filter text-3xl text-teal-500"></i>
+          <span class="text-xs font-medium text-gray-500 uppercase">Filtrados</span>
+        </div>
+        <div class="text-4xl font-bold text-gray-900">{{ metrics.after_filter }}</div>
+        <div class="text-xs text-gray-500 mt-1">Tras filtros</div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-6 border-t-4 border-purple-500 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <i class="fas fa-copy text-3xl text-purple-500"></i>
+          <span class="text-xs font-medium text-gray-500 uppercase">Únicos</span>
+        </div>
+        <div class="text-4xl font-bold text-gray-900">{{ metrics.after_dedup }}</div>
+        <div class="text-xs text-gray-500 mt-1">Sin duplicados</div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-6 border-t-4 border-amber-500 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <i class="fas fa-check-circle text-3xl text-amber-500"></i>
+          <span class="text-xs font-medium text-gray-500 uppercase">Relevantes</span>
+        </div>
+        <div class="text-4xl font-bold text-gray-900">{{ metrics.relevant }}</div>
+        <div class="text-xs text-gray-500 mt-1">>= 70% relevancia</div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-6 border-t-4 border-indigo-500 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <i class="fas fa-star text-3xl text-indigo-500"></i>
+          <span class="text-xs font-medium text-gray-500 uppercase">Incluidos</span>
+        </div>
+        <div class="text-4xl font-bold text-gray-900">{{ metrics.final_included }}</div>
+        <div class="text-xs text-gray-500 mt-1">Revisión final</div>
+      </div>
+    </div>
+
+    <!-- Acciones rápidas -->
+    <div class="bg-white rounded-2xl p-6 mb-10 shadow-xl">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="flex items-center gap-4">
+          <div class="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center">
+            <i class="fas fa-file-alt text-3xl text-emerald-600"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-xl text-gray-800">Revisión Sistemática Completada</h3>
+            <p class="text-sm text-gray-600">Análisis de {{ metrics.final_included }} artículos relevantes</p>
+          </div>
+        </div>
+        <div class="flex gap-4 flex-wrap">
+          <button onclick="copySynthesis()" class="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-700 transition shadow-lg">
+            <i class="fas fa-copy"></i> Copiar Síntesis
+          </button>
+          <a href="/" class="bg-white text-emerald-600 border-2 border-emerald-600 px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-emerald-50 transition">
+            <i class="fas fa-redo"></i> Nueva Revisión
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ✅ SÍNTESIS NARRATIVA -->
+    <div class="bg-white rounded-2xl p-8 mb-10 shadow-xl">
+      <div class="flex items-center justify-between mb-6 border-b pb-4">
+        <h2 class="text-2xl font-bold flex items-center gap-3 text-gray-800">
+          <div class="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center">
+            <i class="fas fa-scroll text-3xl text-emerald-600"></i>
+          </div>
+          Síntesis Narrativa
+        </h2>
+        <button onclick="copySynthesis()" class="p-3 bg-gray-100 rounded-xl text-gray-700 hover:bg-gray-200 transition">
+          <i class="fas fa-copy"></i>
+        </button>
+      </div>
+      <div class="prose prose-lg max-w-none" id="synthesis-content">
+        {{ synthesis | safe }}
+      </div>
+    </div>
+
+    <!-- ✅ DIAGRAMA PRISMA -->
+    {% if plots and plots.prisma %}
+    <div class="bg-white rounded-2xl shadow-xl p-6 mb-10">
+      <h2 class="text-xl font-bold mb-4 flex items-center gap-2 text-gray-800">
+        <i class="fas fa-sitemap text-emerald-600"></i>
+        Diagrama de Flujo PRISMA
+      </h2>
+      <div class="overflow-x-auto">
+        {{ plots.prisma | safe }}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ✅ LISTA DE ARTÍCULOS INCLUIDOS -->
+    <div class="bg-white rounded-2xl p-8 mb-10 shadow-xl">
+      <h2 class="text-2xl font-bold mb-6 flex items-center gap-3 text-gray-800">
+        <i class="fas fa-list-check text-emerald-600"></i>
+        Artículos Incluidos ({{ final_articles|length }})
+      </h2>
+
+      <div class="space-y-6">
+        {% for article in final_articles %}
+        <div class="paper-card border-l-4 border-emerald-500 bg-gradient-to-r from-emerald-50 to-white p-6 rounded-xl">
+          
+          <!-- Título con link -->
+          <h3 class="text-lg font-bold text-gray-800 mb-3 hover:text-emerald-600 transition">
+            <a href="{{ article.url }}" target="_blank" class="flex items-center gap-2">
+              {{ loop.index }}. {{ article.title }}
+              <i class="fas fa-external-link-alt text-sm text-emerald-600"></i>
+            </a>
+          </h3>
+
+          <!-- Metadata -->
+          <div class="flex flex-wrap gap-4 text-sm text-gray-600 mb-4">
+            <span>
+              <i class="fas fa-users text-emerald-600"></i>
+              {{ (article.authors or [])[:3]|join(', ') }}{% if (article.authors or [])|length > 3 %} et al.{% endif %}
+            </span>
+            <span>•</span>
+            <span>
+              <i class="fas fa-calendar text-emerald-600"></i>
+              {{ article.year }}
+            </span>
+            {% if article.journal %}
+            <span>•</span>
+            <span>
+              <i class="fas fa-book text-emerald-600"></i>
+              {{ article.journal }}
+            </span>
+            {% endif %}
+            {% if article.doi %}
+            <span>•</span>
+            <span>
+              <i class="fas fa-fingerprint text-emerald-600"></i>
+              <a href="https://doi.org/{{ article.doi }}" target="_blank" class="text-indigo-600 hover:underline">
+                {{ article.doi }}
+              </a>
+            </span>
+            {% endif %}
+          </div>
+
+          <!-- Relevancia -->
+          <div class="flex items-center gap-3 mb-4">
+            {% set percent = (article.similarity * 100)|int %}
+            {% if percent >= 85 %}
+              {% set badge_class = 'relevance-high' %}
+              {% set badge_icon = '✅' %}
+            {% elif percent >= 70 %}
+              {% set badge_class = 'relevance-medium' %}
+              {% set badge_icon = '⚠️' %}
+            {% else %}
+              {% set badge_class = 'relevance-low' %}
+              {% set badge_icon = '❌' %}
+            {% endif %}
+            
+            <div class="relevance-badge {{ badge_class }}">
+              {{ badge_icon }} {{ percent }}% Relevancia
+            </div>
+            
+            {% if article.source %}
+            <div class="px-4 py-2 bg-gray-100 text-gray-700 rounded-full text-sm">
+              <i class="fas fa-database"></i>
+              {{ article.source }}
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- Abstract (collapsible) -->
+          <details class="group">
+            <summary class="cursor-pointer text-sm font-semibold text-indigo-600 hover:underline list-none flex items-center gap-2">
+              <i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i>
+              Ver Abstract
+            </summary>
+            <div class="mt-3 p-4 bg-gray-50 rounded-lg text-sm text-gray-700 leading-relaxed">
+              {{ article.abstract or 'Abstract no disponible' }}
+            </div>
+          </details>
+
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Timeline del Proceso -->
+    <div class="bg-white rounded-2xl shadow-xl p-8 mb-10">
+      <h2 class="text-2xl font-bold mb-8 flex items-center gap-3 text-gray-800">
+        <i class="fas fa-stream text-emerald-600"></i>
+        Flujo del Proceso
+      </h2>
+      <div class="space-y-6">
+        
+        <div class="flex items-center gap-5">
+          <div class="w-14 h-14 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-search text-emerald-600"></i>
+          </div>
+          <div class="flex-1">
+            <div class="flex justify-between items-center mb-2">
+              <span class="font-semibold text-gray-700">Búsqueda</span>
+              <span class="text-sm font-bold text-emerald-600">{{ metrics.t_search }}s</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+              <div class="h-3 rounded-full bg-emerald-500" 
+                   style="width: {% if metrics.total_time > 0 %}{{ (metrics.t_search / metrics.total_time * 100)|int }}%{% else %}0%{% endif %}"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-5">
+          <div class="w-14 h-14 bg-teal-100 rounded-xl flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-filter text-teal-600"></i>
+          </div>
+          <div class="flex-1">
+            <div class="flex justify-between items-center mb-2">
+              <span class="font-semibold text-gray-700">Filtrado</span>
+              <span class="text-sm font-bold text-teal-600">{{ metrics.t_filter }}s</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+              <div class="h-3 rounded-full bg-teal-500" 
+                   style="width: {% if metrics.total_time > 0 %}{{ (metrics.t_filter / metrics.total_time * 100)|int }}%{% else %}0%{% endif %}"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-5">
+          <div class="w-14 h-14 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-copy text-purple-600"></i>
+          </div>
+          <div class="flex-1">
+            <div class="flex justify-between items-center mb-2">
+              <span class="font-semibold text-gray-700">Deduplicación</span>
+              <span class="text-sm font-bold text-purple-600">{{ metrics.t_dedup }}s</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+              <div class="h-3 rounded-full bg-purple-500" 
+                   style="width: {% if metrics.total_time > 0 %}{{ (metrics.t_dedup / metrics.total_time * 100)|int }}%{% else %}0%{% endif %}"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-5">
+          <div class="w-14 h-14 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-brain text-amber-600"></i>
+          </div>
+          <div class="flex-1">
+            <div class="flex justify-between items-center mb-2">
+              <span class="font-semibold text-gray-700">Screening (70%)</span>
+              <span class="text-sm font-bold text-amber-600">{{ metrics.t_screen }}s</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+              <div class="h-3 rounded-full bg-amber-500" 
+                   style="width: {% if metrics.total_time > 0 %}{{ (metrics.t_screen / metrics.total_time * 100)|int }}%{% else %}0%{% endif %}"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-5">
+          <div class="w-14 h-14 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
+            <i class="fas fa-robot text-indigo-600"></i>
+          </div>
+          <div class="flex-1">
+            <div class="flex justify-between items-center mb-2">
+              <span class="font-semibold text-gray-700">Síntesis IA</span>
+              <span class="text-sm font-bold text-indigo-600">{{ metrics.t_synth }}s</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+              <div class="h-3 rounded-full bg-indigo-500" 
+                   style="width: {% if metrics.total_time > 0 %}{{ (metrics.t_synth / metrics.total_time * 100)|int }}%{% else %}0%{% endif %}"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ✅ Archivos de Descarga -->
+    <div class="bg-white rounded-2xl shadow-xl p-8 mb-10">
+      <h2 class="text-2xl font-bold mb-6 flex items-center gap-3 text-gray-800">
+        <i class="fas fa-download text-emerald-600"></i>
+        Archivos Generados
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {% for log_file in log_files %}
+        <a href="/export_filtered_list?session_id={{ session_id }}&log_file={{ log_file }}" 
+           class="flex items-center justify-between p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl border-2 border-emerald-200 hover:border-emerald-400 transition group">
+          <div class="flex items-center gap-3">
+            <i class="fas fa-file-csv text-2xl text-emerald-600 group-hover:scale-110 transition"></i>
+            <span class="font-semibold text-gray-800 text-sm">{{ log_file.split('_')[-1].replace('.csv', '') | title }}</span>
+          </div>
+          <i class="fas fa-download text-emerald-600"></i>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-gradient-to-r from-gray-900 to-gray-800 text-white py-10">
+    <div class="container mx-auto px-6 text-center">
+      <p class="text-lg font-semibold">
+        © 2025 <span class="text-emerald-400">Universidad Privada Antenor Orrego</span>
+      </p>
+      <p class="text-sm text-gray-400 mt-2">
+        Powered by OpenRouter AI • ChromaDB • FastAPI
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    function copySynthesis() {
+      const text = document.getElementById('synthesis-content').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        const notification = document.createElement('div');
+        notification.className = 'fixed bottom-4 right-4 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-2xl z-50';
+        notification.innerHTML = '<i class="fas fa-check mr-2"></i> Síntesis copiada al portapapeles';
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+          notification.remove();
+        }, 3000);
+      }).catch(() => {
+        alert('Error al copiar. Intenta seleccionar el texto manualmente.');
+      });
+    }
+  </script>
+
+</body>
+</html>
