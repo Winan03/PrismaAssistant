@@ -24,4 +24,4 @@ EXPOSE 8080
 # COMANDO DE INICIO (Corregido y Simplificado)
 # Usamos formato de lista ["..."] que es más seguro
 # Forzamos el puerto 8080 y el host 0.0.0.0
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--loop", "asyncio"]
