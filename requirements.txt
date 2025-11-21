@@ -1,8 +1,7 @@
-# --- FORZAR VERSION CPU DE PYTORCH (CRUCIAL PARA VERCEL) ---
-torch==2.2.2+cpu --extra-index-url https://download.pytorch.org/whl/cpu
-torchvision==0.17.2+cpu --extra-index-url https://download.pytorch.org/whl/cpu
-# -----------------------------------------------------------
+--extra-index-url https://download.pytorch.org/whl/cpu
 
+torch==2.2.2+cpu
+torchvision==0.17.2+cpu
 sentence-transformers==3.0.1
 fastapi==0.111.0
 uvicorn==0.30.1
