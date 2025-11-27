@@ -35,11 +35,9 @@ pandas==2.2.2
 biopython==1.81
 
 # Bases de datos 
-# IMPORTANTE: Si no usas Chroma/Milvus, bórralos. 
-# Son muy pesados y causan conflictos con httpx a veces.
 pymongo==4.8.0
-# chromadb==0.4.24  <-- COMENTADO PARA AHORRAR ESPACIO Y EVITAR CONFLICTOS
-# pymilvus==2.4.4   <-- COMENTADO
+chromadb==0.4.24  
+pymilvus==2.4.4  
 
 # Otros
 reportlab==4.2.2
