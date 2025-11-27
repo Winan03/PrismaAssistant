@@ -1,15 +1,18 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 
+# --- FIX PARA OPENAI / HTTPX (CRÍTICO) ---
+httpx==0.27.2
+httpcore==1.0.5
+# -----------------------------------------
+
 # --- FIX PARA NUMPY 2.0 ---
 numpy==1.26.4
-# --------------------------
 
-# Torch CPU (Versión ligera sin CUDA para ahorrar espacio)
+# Torch CPU
 torch==2.2.2+cpu
 torchvision==0.17.2+cpu
 
-# --- LLAMAINDEX (Versión Modular Ligera) ---
-# Usamos los módulos específicos en lugar del paquete gigante 'llama-index'
+# --- LLAMAINDEX ---
 llama-index-core
 llama-index-llms-ollama
 llama-index-embeddings-huggingface
@@ -31,10 +34,12 @@ python-levenshtein==0.25.1
 pandas==2.2.2
 biopython==1.81
 
-# Bases de datos (Si ya no usas Milvus/Chroma, podrías borrarlas para ahorrar más espacio)
+# Bases de datos 
+# IMPORTANTE: Si no usas Chroma/Milvus, bórralos. 
+# Son muy pesados y causan conflictos con httpx a veces.
 pymongo==4.8.0
-pymilvus==2.4.4
-chromadb==0.4.24
+# chromadb==0.4.24  <-- COMENTADO PARA AHORRAR ESPACIO Y EVITAR CONFLICTOS
+# pymilvus==2.4.4   <-- COMENTADO
 
 # Otros
 reportlab==4.2.2
