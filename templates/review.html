@@ -86,6 +86,10 @@
           <i class="fas fa-file-alt mr-2"></i>
           Exportar como RIS
         </button>
+        <button onclick="downloadAllPDFs()" class="px-6 py-3 bg-gradient-to-r from-gray-700 to-gray-900 text-white rounded-xl font-semibold hover:shadow-lg transition-all">
+            <i class="fas fa-file-pdf mr-2"></i>
+            Descargar PDFs (Beta)
+        </button>
       </div>
     </div>
 
@@ -110,6 +114,7 @@
                 <span><i class="fas fa-calendar"></i> {{ article.year }}</span>
                 <span>•</span>
                 <span><i class="fas fa-book"></i> {{ article.journal or 'Sin revista' }}</span>
+                {% if article.volume %}<span>• Vol: {{ article.volume }}</span>{% endif %}
               </div>
             </div>
             <div class="flex-shrink-0 ml-4">
@@ -150,34 +155,6 @@
             <div class="p-3 bg-gradient-to-br from-teal-50 to-emerald-50 rounded-lg border border-teal-200">
               <div class="font-semibold text-xs text-teal-700 mb-2 uppercase">👥 Population</div>
               <p class="text-sm text-gray-700">{{ article.population }}</p>
-            </div>
-            {% endif %}
-
-            {% if article.intervention %}
-            <div class="p-3 bg-gradient-to-br from-orange-50 to-red-50 rounded-lg border border-orange-200">
-              <div class="font-semibold text-xs text-orange-700 mb-2 uppercase">💊 Intervention</div>
-              <p class="text-sm text-gray-700">{{ article.intervention }}</p>
-            </div>
-            {% endif %}
-
-            {% if article.key_findings %}
-            <div class="p-3 bg-gradient-to-br from-cyan-50 to-blue-50 rounded-lg border border-cyan-200">
-              <div class="font-semibold text-xs text-cyan-700 mb-2 uppercase">📊 Key Findings</div>
-              <p class="text-sm text-gray-700">{{ article.key_findings }}</p>
-            </div>
-            {% endif %}
-
-            {% if article.limitations %}
-            <div class="p-3 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-lg border border-amber-200">
-              <div class="font-semibold text-xs text-amber-700 mb-2 uppercase">⚠️ Limitations</div>
-              <p class="text-sm text-gray-700">{{ article.limitations }}</p>
-            </div>
-            {% endif %}
-
-            {% if article.conclusions %}
-            <div class="p-3 bg-gradient-to-br from-green-50 to-teal-50 rounded-lg border border-green-200">
-              <div class="font-semibold text-xs text-green-700 mb-2 uppercase">✅ Conclusions</div>
-              <p class="text-sm text-gray-700">{{ article.conclusions }}</p>
             </div>
             {% endif %}
           </div>
@@ -225,151 +202,168 @@
   </footer>
 
   <script>
+    // Recuperamos TODOS los datos que envió Python
     const articles = {{ included_articles | tojson | safe }};
     const sessionId = "{{ session_id }}";
     const question = "{{ question }}";
 
+    // ---------------------------------------------------------
+    //  FUNCIÓN CORREGIDA: Ahora escribe TODOS los datos
+    // ---------------------------------------------------------
     function exportBibTeX() {
-    let bibtex = '';
-    
-    articles.forEach((article, idx) => {
-        const key = generateBibKey(article);
+        let bibtex = '';
         
-        bibtex += `@article{${key},\n`;
-        bibtex += `  title={${escapeBibtex(article.title)}},\n`;
+        articles.forEach((article, idx) => {
+            const key = generateBibKey(article);
+            
+            bibtex += `@article{${key},\n`;
+            bibtex += `  title={${escapeBibtex(article.title)}},\n`;
+            
+            // Autores en formato BibTeX
+            if (article.authors && article.authors.length > 0) {
+                const authorStr = article.authors.join(' and ');
+                bibtex += `  author={${escapeBibtex(authorStr)}},\n`;
+            }
+            
+            bibtex += `  journal={${escapeBibtex(article.journal || 'Unknown')}},\n`;
+            bibtex += `  year={${article.year || 'n.d.'}},\n`;
+            
+            // --- NUEVAS LÍNEAS AÑADIDAS PARA QUE APAREZCAN EN ZOTERO ---
+            if (article.volume) {
+                bibtex += `  volume={${escapeBibtex(article.volume)}},\n`;
+            }
+            if (article.issue) {
+                bibtex += `  number={${escapeBibtex(article.issue)}},\n`;
+            }
+            if (article.pages) {
+                bibtex += `  pages={${escapeBibtex(article.pages)}},\n`;
+            }
+            if (article.issn) {
+                bibtex += `  issn={${escapeBibtex(article.issn)}},\n`;
+            }
+            if (article.journal_short) {
+                bibtex += `  shortjournal={${escapeBibtex(article.journal_short)}},\n`;
+            }
+            // -----------------------------------------------------------
+
+            if (article.doi) {
+                bibtex += `  doi={${article.doi}},\n`;
+            }
+            
+            if (article.abstract) {
+                bibtex += `  abstract={${escapeBibtex(article.abstract.substring(0, 800))}...},\n`;
+            }
+            
+            if (article.url) {
+                bibtex += `  url={${article.url}},\n`;
+            }
+            
+            // Enlace al PDF
+            const pdfUrl = article.url || (article.doi ? `https://doi.org/${article.doi}` : '');
+            if (pdfUrl) {
+                const filename = `${key}.pdf`;
+                bibtex += `  file={${filename}:${pdfUrl}:application/pdf},\n`;
+            }
+            
+            // Notas
+            if (article.researcher_notes) {
+                bibtex += `  note={${escapeBibtex(article.researcher_notes)}},\n`;
+            }
+            
+            bibtex += `}\n\n`;
+        });
         
-        // Autores en formato BibTeX
-        if (article.authors && article.authors.length > 0) {
-        const authorStr = article.authors.join(' and ');
-        bibtex += `  author={${escapeBibtex(authorStr)}},\n`;
-        }
+        downloadFile(bibtex, 'references.bib', 'text/plain');
         
-        bibtex += `  journal={${escapeBibtex(article.journal || 'Unknown')}},\n`;
-        bibtex += `  year={${article.year || 'n.d.'}},\n`;
-        
-        if (article.doi) {
-        bibtex += `  doi={${article.doi}},\n`;
-        }
-        
-        if (article.abstract) {
-        bibtex += `  abstract={${escapeBibtex(article.abstract.substring(0, 500))}...},\n`;
-        }
-        
-        if (article.url) {
-        bibtex += `  url={${article.url}},\n`;
-        }
-        
-        // CLAVE: Campo 'file' con enlace al PDF
-        // Zotero reconoce este campo y puede descargar PDFs automáticamente
-        const pdfUrl = article.url || (article.doi ? `https://doi.org/${article.doi}` : '');
-        
-        if (pdfUrl) {
-        // Formato: nombre_archivo:ruta:tipo
-        const filename = `${key}.pdf`;
-        bibtex += `  file={${filename}:${pdfUrl}:application/pdf},\n`;
-        }
-        
-        // Campos personalizados (notas del investigador)
-        if (article.researcher_notes) {
-        bibtex += `  note={${escapeBibtex(article.researcher_notes)}},\n`;
-        }
-        
-        // Keywords generados por IA
-        const keywords = [];
-        if (article.methodology) keywords.push('methodology');
-        if (article.key_findings) keywords.push('findings');
-        if (article.limitations) keywords.push('limitations');
-        
-        if (keywords.length > 0) {
-        bibtex += `  keywords={${keywords.join(', ')}},\n`;
-        }
-        
-        bibtex += `}\n\n`;
-    });
-    
-    downloadFile(bibtex, 'references.bib', 'text/plain');
-    
-    // Mostrar instrucciones para Zotero
-    alert(`✅ BibTeX exportado con éxito!\n\n📚 INSTRUCCIONES PARA ZOTERO:\n\n1. Importa el archivo .bib en Zotero\n2. Ve a Preferencias > General > Adjuntos de archivos\n3. Activa "Obtener PDFs automáticamente"\n4. Haz clic derecho en los artículos > "Buscar PDF disponible"\n\nZotero descargará los PDFs automáticamente desde las URLs.`);
+        // Mensaje de éxito
+        alert(`✅ BibTeX exportado!\nSe han incluido Volúmenes, Números y Páginas.`);
     }
 
     function exportCSV() {
-    let csv = 'Title,Authors,Year,Journal,DOI,Relevance,URL,PDF_Link,Notes,Summary,Methodology,Population,Key_Findings,Limitations,Conclusions\n';
-    
-    articles.forEach(article => {
-        const pdfLink = article.url || (article.doi ? `https://doi.org/${article.doi}` : '');
+        // Añadimos también las columnas nuevas al encabezado del CSV
+        let csv = 'Title,Authors,Year,Journal,Volume,Issue,Pages,DOI,Relevance,URL,PDF_Link,Notes,Summary,Methodology,Population,Key_Findings,Limitations,Conclusions\n';
         
-        const row = [
-        escapeCSV(article.title),
-        escapeCSV((article.authors || []).join('; ')),
-        article.year,
-        escapeCSV(article.journal || ''),
-        article.doi || '',
-        `${(article.similarity * 100).toFixed(1)}%`,
-        article.url || '',
-        pdfLink,
-        escapeCSV(article.researcher_notes || ''),
-        escapeCSV(article.summary || ''),
-        escapeCSV(article.methodology || ''),
-        escapeCSV(article.population || ''),
-        escapeCSV(article.key_findings || ''),
-        escapeCSV(article.limitations || ''),
-        escapeCSV(article.conclusions || '')
-        ].join(',');
+        articles.forEach(article => {
+            const pdfLink = article.url || (article.doi ? `https://doi.org/${article.doi}` : '');
+            
+            const row = [
+                escapeCSV(article.title),
+                escapeCSV((article.authors || []).join('; ')),
+                article.year,
+                escapeCSV(article.journal || ''),
+                escapeCSV(article.volume || ''), // Nuevo
+                escapeCSV(article.issue || ''),  // Nuevo
+                escapeCSV(article.pages || ''),  // Nuevo
+                article.doi || '',
+                `${(article.similarity * 100).toFixed(1)}%`,
+                article.url || '',
+                pdfLink,
+                escapeCSV(article.researcher_notes || ''),
+                escapeCSV(article.summary || ''),
+                escapeCSV(article.methodology || ''),
+                escapeCSV(article.population || ''),
+                escapeCSV(article.key_findings || ''),
+                escapeCSV(article.limitations || ''),
+                escapeCSV(article.conclusions || '')
+            ].join(',');
+            
+            csv += row + '\n';
+        });
         
-        csv += row + '\n';
-    });
-    
-    downloadFile(csv, 'references_full.csv', 'text/csv');
-    alert('✅ CSV exportado con todos los campos generados por IA');
+        downloadFile(csv, 'references_full.csv', 'text/csv');
+        alert('✅ CSV exportado con datos bibliográficos completos');
     }
 
     function exportRIS() {
-    let ris = '';
-    
-    articles.forEach(article => {
-        ris += 'TY  - JOUR\n';
-        ris += `TI  - ${article.title}\n`;
+        let ris = '';
         
-        (article.authors || []).forEach(author => {
-        ris += `AU  - ${author}\n`;
+        articles.forEach(article => {
+            ris += 'TY  - JOUR\n';
+            ris += `TI  - ${article.title}\n`;
+            
+            (article.authors || []).forEach(author => {
+                ris += `AU  - ${author}\n`;
+            });
+            
+            ris += `PY  - ${article.year}\n`;
+            ris += `JO  - ${article.journal || 'Unknown'}\n`;
+            
+            // --- NUEVOS CAMPOS RIS ---
+            if (article.volume) ris += `VL  - ${article.volume}\n`;
+            if (article.issue)  ris += `IS  - ${article.issue}\n`;
+            if (article.pages) {
+                // RIS prefiere SP (Start Page) y EP (End Page), pero a veces solo tenemos el rango
+                ris += `SP  - ${article.pages}\n`; 
+            }
+            if (article.issn)   ris += `SN  - ${article.issn}\n`;
+            // -------------------------
+
+            if (article.doi) {
+                ris += `DO  - ${article.doi}\n`;
+            }
+            
+            if (article.abstract) {
+                ris += `AB  - ${article.abstract}\n`;
+            }
+            
+            if (article.url) {
+                ris += `UR  - ${article.url}\n`;
+            }
+            
+            const pdfUrl = article.url || (article.doi ? `https://doi.org/${article.doi}` : '');
+            if (pdfUrl) {
+                ris += `L1  - ${pdfUrl}\n`;
+            }
+            
+            if (article.researcher_notes) {
+                ris += `N1  - ${article.researcher_notes}\n`;
+            }
+            
+            ris += 'ER  - \n\n';
         });
         
-        ris += `PY  - ${article.year}\n`;
-        ris += `JO  - ${article.journal || 'Unknown'}\n`;
-        
-        if (article.doi) {
-        ris += `DO  - ${article.doi}\n`;
-        }
-        
-        if (article.abstract) {
-        ris += `AB  - ${article.abstract}\n`;
-        }
-        
-        if (article.url) {
-        ris += `UR  - ${article.url}\n`;
-        }
-        
-        // Enlace PDF
-        const pdfUrl = article.url || (article.doi ? `https://doi.org/${article.doi}` : '');
-        if (pdfUrl) {
-        ris += `L1  - ${pdfUrl}\n`;  // L1 = Full-text link
-        }
-        
-        // Notas personalizadas
-        if (article.researcher_notes) {
-        ris += `N1  - ${article.researcher_notes}\n`;
-        }
-        
-        if (article.methodology) {
-        ris += `N1  - Methodology: ${article.methodology}\n`;
-        }
-        
-        ris += 'ER  - \n\n';
-    });
-    
-    downloadFile(ris, 'references.ris', 'application/x-research-info-systems');
-    alert('✅ RIS exportado con enlaces a PDF');
+        downloadFile(ris, 'references.ris', 'application/x-research-info-systems');
+        alert('✅ RIS exportado correctamente');
     }
 
     // ===================================================================
@@ -377,83 +371,66 @@
     // ===================================================================
 
     function generateBibKey(article) {
-    /**
-     * Genera una clave BibTeX única y legible
-     * Formato: PrimerAutor2025_PrimeraPalabraTitulo
-     */
-    let key = '';
-    
-    // Primer autor
-    if (article.authors && article.authors.length > 0) {
-        const firstAuthor = article.authors[0].split(' ');
-        const lastName = firstAuthor[firstAuthor.length - 1];
-        key += lastName.replace(/[^a-zA-Z]/g, '');
-    } else {
-        key += 'Unknown';
-    }
-    
-    // Año
-    key += article.year || '0000';
-    
-    // Primera palabra del título
-    if (article.title) {
-        const firstWord = article.title.split(' ')[0].replace(/[^a-zA-Z]/g, '');
-        if (firstWord) {
-        key += '_' + firstWord;
+        let key = '';
+        // Primer autor
+        if (article.authors && article.authors.length > 0) {
+            const firstAuthor = article.authors[0].split(' ');
+            const lastName = firstAuthor[firstAuthor.length - 1];
+            key += lastName.replace(/[^a-zA-Z]/g, '');
+        } else {
+            key += 'Unknown';
         }
-    }
-    
-    return key;
+        
+        // Año
+        key += article.year || '0000';
+        
+        // Primera palabra del título
+        if (article.title) {
+            const firstWord = article.title.split(' ')[0].replace(/[^a-zA-Z]/g, '');
+            if (firstWord) {
+                key += '_' + firstWord;
+            }
+        }
+        return key;
     }
 
     function escapeBibtex(text) {
-    /**
-     * Escapa caracteres especiales para BibTeX
-     */
-    if (!text) return '';
-    
-    return text
-        .replace(/\\/g, '\\\\')
-        .replace(/{/g, '\\{')
-        .replace(/}/g, '\\}')
-        .replace(/~/g, '\\~{}')
-        .replace(/\^/g, '\\^{}')
-        .replace(/#/g, '\\#')
-        .replace(/&/g, '\\&')
-        .replace(/_/g, '\\_')
-        .replace(/%/g, '\\%')
-        .replace(/\$/g, '\\$');
+        if (!text) return '';
+        return text
+            .replace(/\\/g, '\\\\')
+            .replace(/{/g, '\\{')
+            .replace(/}/g, '\\}')
+            .replace(/~/g, '\\~{}')
+            .replace(/\^/g, '\\^{}')
+            .replace(/#/g, '\\#')
+            .replace(/&/g, '\\&')
+            .replace(/_/g, '\\_')
+            .replace(/%/g, '\\%')
+            .replace(/\$/g, '\\$');
     }
 
     function escapeCSV(text) {
-    /**
-     * Escapa comillas y agrega comillas si contiene comas
-     */
-    if (!text) return '""';
-    
-    text = String(text);
-    
-    if (text.includes('"')) {
-        text = text.replace(/"/g, '""');
-    }
-    
-    if (text.includes(',') || text.includes('"') || text.includes('\n')) {
-        text = `"${text}"`;
-    }
-    
-    return text;
+        if (!text) return '""';
+        text = String(text);
+        if (text.includes('"')) {
+            text = text.replace(/"/g, '""');
+        }
+        if (text.includes(',') || text.includes('"') || text.includes('\n')) {
+            text = `"${text}"`;
+        }
+        return text;
     }
 
     function downloadFile(content, filename, mimeType) {
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 
     async function proceedToSynthesis() {
@@ -489,77 +466,69 @@
       }
     }
 
-    // ===================================================================
-    // NUEVA FUNCIÓN: Descargar PDFs directamente (BETA)
-    // ===================================================================
-
     async function downloadAllPDFs() {
-    /**
-     * Intenta descargar PDFs directamente desde Semantic Scholar / Unpaywall
-     * NOTA: Solo funciona para artículos Open Access
-     */
-    if (!confirm(`Esta función intentará descargar ${articles.length} PDFs.\n\n⚠️ ADVERTENCIA:\n- Solo funciona con artículos Open Access\n- Puede tardar varios minutos\n- Algunos PDFs pueden no estar disponibles\n\n¿Continuar?`)) {
-        return;
-    }
-    
-    const btn = event.target;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Descargando PDFs...';
-    
-    let successCount = 0;
-    let failCount = 0;
-    
-    for (let i = 0; i < articles.length; i++) {
-        const article = articles[i];
-        
-        try {
-        // Intentar obtener PDF desde Unpaywall API (requiere email)
-        const doi = article.doi;
-        if (!doi) {
-            failCount++;
-            continue;
+        if (!confirm(`Esta función intentará descargar ${articles.length} PDFs.\n\n⚠️ ADVERTENCIA:\n- Solo funciona con artículos Open Access\n- Puede tardar varios minutos\n- Algunos PDFs pueden no estar disponibles\n\n¿Continuar?`)) {
+            return;
         }
         
-        const unpaywallUrl = `https://api.unpaywall.org/v2/${doi}?email=prisma-assistant@upao.edu.pe`;
-        const response = await fetch(unpaywallUrl);
+        const btn = event.target;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Descargando PDFs...';
         
-        if (response.ok) {
-            const data = await response.json();
+        let successCount = 0;
+        let failCount = 0;
+        
+        for (let i = 0; i < articles.length; i++) {
+            const article = articles[i];
             
-            if (data.best_oa_location && data.best_oa_location.url_for_pdf) {
-            const pdfUrl = data.best_oa_location.url_for_pdf;
-            
-            // Descargar PDF
-            const pdfResponse = await fetch(pdfUrl);
-            const pdfBlob = await pdfResponse.blob();
-            
-            // Guardar archivo
-            const filename = `${generateBibKey(article)}.pdf`;
-            downloadFile(pdfBlob, filename, 'application/pdf');
-            
-            successCount++;
-            
-            // Esperar 1 segundo entre descargas (rate limiting)
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            } else {
-            failCount++;
+            try {
+                // Intentar obtener PDF desde Unpaywall API
+                const doi = article.doi;
+                if (!doi) {
+                    failCount++;
+                    continue;
+                }
+                
+                const unpaywallUrl = `https://api.unpaywall.org/v2/${doi}?email=prisma-assistant@upao.edu.pe`;
+                const response = await fetch(unpaywallUrl);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.best_oa_location && data.best_oa_location.url_for_pdf) {
+                        const pdfUrl = data.best_oa_location.url_for_pdf;
+                        
+                        // Descargar PDF
+                        const pdfResponse = await fetch(pdfUrl);
+                        const pdfBlob = await pdfResponse.blob();
+                        
+                        // Guardar archivo
+                        const filename = `${generateBibKey(article)}.pdf`;
+                        downloadFile(pdfBlob, filename, 'application/pdf');
+                        
+                        successCount++;
+                        
+                        // Esperar 1 segundo entre descargas
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    } else {
+                        failCount++;
+                    }
+                } else {
+                    failCount++;
+                }
+            } catch (error) {
+                console.error(`Error descargando PDF de "${article.title}":`, error);
+                failCount++;
             }
-        } else {
-            failCount++;
-        }
-        } catch (error) {
-        console.error(`Error descargando PDF de "${article.title}":`, error);
-        failCount++;
+            
+            // Actualizar progreso
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Descargando... (${i + 1}/${articles.length})`;
         }
         
-        // Actualizar progreso
-        btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Descargando... (${i + 1}/${articles.length})`;
-    }
-    
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-download mr-2"></i> Descargar PDFs';
-    
-    alert(`✅ Descarga completada!\n\n- PDFs descargados: ${successCount}\n- No disponibles: ${failCount}\n\nLos PDFs no disponibles requieren acceso institucional o no son Open Access.`);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-file-pdf mr-2"></i> Descargar PDFs (Beta)';
+        
+        alert(`✅ Descarga completada!\n\n- PDFs descargados: ${successCount}\n- No disponibles: ${failCount}`);
     }
   </script>
 

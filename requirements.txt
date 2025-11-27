@@ -4,26 +4,46 @@
 numpy==1.26.4
 # --------------------------
 
+# Torch CPU (Versión ligera sin CUDA para ahorrar espacio)
 torch==2.2.2+cpu
 torchvision==0.17.2+cpu
+
+# --- LLAMAINDEX (Versión Modular Ligera) ---
+# Usamos los módulos específicos en lugar del paquete gigante 'llama-index'
+llama-index-core
+llama-index-llms-ollama
+llama-index-embeddings-huggingface
+
+# Dependencias Core
 sentence-transformers==3.0.1
+transformers==4.45.0
+accelerate==0.34.0
 fastapi==0.111.0
 uvicorn==0.30.1
 jinja2==3.1.4
-pymongo==4.8.0
-pymilvus==2.4.4
 requests==2.32.3
+python-dotenv==1.0.1
+pdfplumber==0.11.0
+
+# Herramientas de Texto y Datos
 fuzzywuzzy==0.18.0
 python-levenshtein==0.25.1
+pandas==2.2.2
+biopython==1.81
+
+# Bases de datos (Si ya no usas Milvus/Chroma, podrías borrarlas para ahorrar más espacio)
+pymongo==4.8.0
+pymilvus==2.4.4
+chromadb==0.4.24
+
+# Otros
 reportlab==4.2.2
 plotly==5.22.0
-pandas==2.2.2
-python-dotenv==1.0.1
 semanticscholar==0.9.0
 habanero==1.2.0
 openai==1.35.3
 marshmallow==3.21.3
 environs==9.5.0
-biopython==1.81
-pdfplumber==0.11.0
-chromadb==0.4.24
+matplotlib>=3.8
+fpdf2>=2.7.9
+pillow>=10.0

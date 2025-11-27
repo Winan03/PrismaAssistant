@@ -1,334 +1,316 @@
-"""
-Búsqueda Multi-API OPTIMIZADA PARA VELOCIDAD Y ENRIQUECIMIENTO DE TEXTO COMPLETO
-"""
 import time
 import requests
-from semanticscholar import SemanticScholar
 import config
 import logging
+import re
 from typing import List, Dict
 from Bio import Entrez
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from modules.pdf_extractor import enrich_initial_search_result
 
-# IMPORTACIÓN NECESARIA para enriquecer el artículo
-from modules.pdf_extractor import enrich_article_with_full_text 
-
-# Configurar email para PubMed
 Entrez.email = "prisma-assistant@upao.edu.pe"
 
+# ============================================================
+# 🧠 GESTIÓN DE CONSULTAS (ESTRATEGIA MULTI-QUERY)
+# ============================================================
 
-def search_semantic_scholar_fast(terms: List[str], max_results: int = 200) -> List[Dict]:
+def generate_smart_variations(terms: List[str]) -> List[List[str]]:
     """
-    Búsqueda RÁPIDA en Semantic Scholar, capturando la URL del PDF (si Open Access).
+    Implementa la estrategia 'Divide y Vencerás' para maximizar el Recall.
     """
-    if not config.SEMANTIC_SCHOLAR_API_KEY:
-        logging.warning("⚠️ Semantic Scholar API Key no configurada")
-        return []
-    
-    articles = []
-    
-    try:
-        sch = SemanticScholar(api_key=config.SEMANTIC_SCHOLAR_API_KEY)
-        query = " ".join(terms[:5])
-        
-        logging.info(f"🔬 Semantic Scholar: 1 query rápida con 100 resultados...")
-        logging.info(f"   Query: '{query[:80]}...'")
-        
-        # Semantic Scholar pagina cada 100, así que solo pedimos 100
-        results = sch.search_paper(query, limit=100)
-        
-        seen_titles = set()
-        
-        for paper in results:
-            if len(articles) >= max_results:
-                break
-            
-            if not paper.title or paper.title in seen_titles:
-                continue
-            
-            seen_titles.add(paper.title)
-            
-            year = paper.year if paper.year else 0
-            
-            doi = paper.externalIds.get('DOI', '') if paper.externalIds and isinstance(paper.externalIds, dict) else ""
-            
-            journal_name = ""
-            if paper.journal:
-                if hasattr(paper.journal, 'name'):
-                    journal_name = str(paper.journal.name) if paper.journal.name else ""
-                elif isinstance(paper.journal, str):
-                    journal_name = paper.journal
-            
-            # CAPTURA DE PDF URL (CRÍTICO)
-            pdf_url = ""
-            if paper.openAccessPdf and paper.openAccessPdf.get('url'):
-                 pdf_url = paper.openAccessPdf['url']
-                 
-            articles.append({
-                "title": paper.title,
-                "authors": [str(a.name) for a in paper.authors] if paper.authors else [],
-                "doi": doi,
-                "year": year,
-                "abstract": paper.abstract or "",
-                "journal": journal_name,
-                "url": paper.url or "",
-                "pdf_url": pdf_url, # <-- CAMPO AÑADIDO
-                "source": "Semantic Scholar"
-            })
-        
-        logging.info(f"   ✅ {len(articles)} artículos en 1 query")
-        
-    except Exception as e:
-        logging.error(f"❌ Semantic Scholar error: {e}")
-    
-    return articles
+    if any((" AND " in t or " OR " in t) for t in terms):
+        logging.info("⚡ Detectadas Estrategias Multi-Query avanzadas (Grok).")
+        return [[t] for t in terms]
 
+    # Bloques de construcción (Fallback)
+    ai_broad = '("artificial intelligence" OR "machine learning" OR "deep learning")'
+    cvd_broad = '("cardiovascular disease" OR "heart disease")'
+    goal_early = '("early detection" OR "diagnosis")'
+    
+    return [
+        [ai_broad, cvd_broad, goal_early], 
+        [ai_broad, '("heart failure" OR "atrial fibrillation")', goal_early], 
+        [ai_broad, cvd_broad, '("AUC" OR "accuracy")']
+    ]
 
-def search_pubmed_fast(terms: List[str], max_results: int = 150) -> List[Dict]:
-    """
-    Búsqueda con queries booleanas BALANCEADAS en PubMed.
-    """
-    articles = []
-    
-    try:
-        llm_core = []
-        for t in terms:
-            t_lower = t.lower()
-            if any(kw in t_lower for kw in ['language model', 'llm', 'gpt', 'chatgpt', 'transformer']):
-                if 'language model' in t_lower:
-                    llm_core.append('large language model')
-                elif 'gpt' in t_lower or 'chatgpt' in t_lower:
-                    llm_core.append('GPT')
-                else:
-                    llm_core.append(t)
-        
-        if not llm_core:
-            llm_core = ['large language model', 'GPT', 'artificial intelligence']
-        
-        med_broad = ['clinical', 'diagnosis', 'diagnostic', 'medical', 'healthcare']
-        
-        llm_query = " OR ".join([f'"{t}"[Title/Abstract]' for t in llm_core[:3]])
-        med_query = " OR ".join([f'{t}[Title/Abstract]' for t in med_broad[:5]])
-        
-        query = f"({llm_query}) AND ({med_query})"
-        
-        logging.info(f"🔬 PubMed: Query balanceada...")
-        logging.info(f"   Query: {query[:200]}...")
-        
-        handle = Entrez.esearch(db="pubmed", term=query, retmax=max_results, sort="relevance")
-        record = Entrez.read(handle)
-        handle.close()
-        id_list = record["IdList"]
-        
-        if not id_list:
-            logging.warning("⚠️ PubMed: Sin resultados con query AND, probando OR...")
-            query_fallback = f"({llm_query}) {med_broad[0]}[Title/Abstract]"
-            handle = Entrez.esearch(db="pubmed", term=query_fallback, retmax=max_results, sort="relevance")
-            record = Entrez.read(handle)
-            handle.close()
-            id_list = record["IdList"]
-            
-            if not id_list:
-                return []
-        
-        logging.info(f"   Encontrados {len(id_list)} IDs, obteniendo detalles...")
-        
-        for i in range(0, len(id_list), 100):
-            batch_ids = id_list[i:i+100]
-            
-            handle = Entrez.efetch(db="pubmed", id=batch_ids, rettype="medline", retmode="text")
-            records = handle.read()
-            handle.close()
-            
-            current_record = {}
-            for line in records.split("\n"):
-                if line.startswith("PMID- "):
-                    if current_record and "title" in current_record:
-                        articles.append({
-                            "title": current_record.get("title", ""),
-                            "authors": current_record.get("authors", []),
-                            "doi": current_record.get("doi", ""),
-                            "year": current_record.get("year", 0),
-                            "abstract": current_record.get("abstract", ""),
-                            "journal": current_record.get("journal", ""),
-                            "url": f"https://pubmed.ncbi.nlm.nih.gov/{current_record.get('pmid', '')}/",
-                            "source": "PubMed",
-                            "pdf_url": "" # PubMed rara vez da la URL directa al PDF
-                        })
-                    current_record = {"pmid": line.split("- ")[1].strip()}
-                
-                elif line.startswith("TI  - "):
-                    current_record["title"] = line.split("- ", 1)[1].strip()
-                elif line.startswith("AU  - "):
-                    if "authors" not in current_record: current_record["authors"] = []
-                    current_record["authors"].append(line.split("- ")[1].strip())
-                elif line.startswith("DP  - "):
-                    try:
-                        current_record["year"] = int(line.split("- ")[1].split()[0])
-                    except: pass
-                elif line.startswith("AB  - "):
-                    current_record["abstract"] = line.split("- ", 1)[1].strip()
-                elif line.startswith("TA  - "):
-                    current_record["journal"] = line.split("- ")[1].strip()
-                elif line.startswith("AID - ") and "[doi]" in line:
-                    current_record["doi"] = line.split("- ")[1].split("[")[0].strip()
-            
-            if current_record and "title" in current_record:
-                articles.append({
-                    "title": current_record.get("title", ""),
-                    "authors": current_record.get("authors", []),
-                    "doi": current_record.get("doi", ""),
-                    "year": current_record.get("year", 0),
-                    "abstract": current_record.get("abstract", ""),
-                    "journal": current_record.get("journal", ""),
-                    "url": f"https://pubmed.ncbi.nlm.nih.gov/{current_record.get('pmid', '')}/",
-                    "source": "PubMed",
-                    "pdf_url": ""
-                })
-            
-            time.sleep(0.3)
-        
-        logging.info(f"   ✅ {len(articles)} artículos")
-        
-    except Exception as e:
-        logging.error(f"❌ PubMed error: {e}")
-    
-    return articles
+# ============================================================
+# ✅ SEMANTIC SCHOLAR (META AJUSTADA: 250)
+# ============================================================
 
+def search_semantic_scholar_oa(term_variations: List[List[str]], target: int = 250) -> List[Dict]:
+    if not config.SEMANTIC_SCHOLAR_API_KEY: return []
 
-def search_arxiv_fast(terms: List[str], max_results: int = 50) -> List[Dict]:
-    """
-    Búsqueda RÁPIDA en arXiv.
-    """
-    articles = []
-    
-    try:
-        import urllib.parse
-        core_terms = " AND ".join([f'"{t}"' for t in terms[:3]])
-        query = f"{core_terms}"
-        encoded_query = urllib.parse.quote(query)
-        url = f"http://export.arxiv.org/api/query?search_query={encoded_query}&start=0&max_results={max_results}&sortBy=relevance"
-        
-        logging.info(f"🔬 arXiv: 1 query rápida con {max_results} resultados...")
-        response = requests.get(url, timeout=15)
-        
-        if response.status_code == 200:
-            import xml.etree.ElementTree as ET
-            root = ET.fromstring(response.content)
-            namespace = {'atom': 'http://www.w3.org/2005/Atom'}
-            entries = root.findall('atom:entry', namespace)
-            
-            for entry in entries:
-                title = entry.find('atom:title', namespace)
-                summary = entry.find('atom:summary', namespace)
-                published = entry.find('atom:published', namespace)
-                link = entry.find('atom:id', namespace)
-                pdf_link = entry.find('atom:link[@title="pdf"]', namespace) # Capturar PDF
-                
-                authors = [author.find('atom:name', namespace).text for author in entry.findall('atom:author', namespace) if author.find('atom:name', namespace) is not None]
-                
-                year = int(published.text[:4]) if published is not None else 0
-                
-                articles.append({
-                    "title": title.text.strip() if title is not None else "",
-                    "authors": authors,
-                    "doi": "",
-                    "year": year,
-                    "abstract": summary.text.strip() if summary is not None else "",
-                    "journal": "arXiv preprint",
-                    "url": link.text if link is not None else "",
-                    "pdf_url": pdf_link.attrib['href'] if pdf_link is not None else "", # <-- CAMPO AÑADIDO
-                    "source": "arXiv"
-                })
-            
-            logging.info(f"   ✅ {len(articles)} artículos")
-        
-    except Exception as e:
-        logging.error(f"❌ arXiv error: {e}")
-    
-    return articles
+    articles_map = {} 
+    url = "https://api.semanticscholar.org/graph/v1/paper/search"
+    headers = {"x-api-key": config.SEMANTIC_SCHOLAR_API_KEY}
+    # 🔥 SOLICITAMOS MÁS CAMPOS AQUÍ: publicationDate, venue, etc.
+    fields = "title,year,abstract,authors,externalIds,url,openAccessPdf,journal,publicationDate,venue"
 
-
-def search_articles(query_terms: List[str], max_results: int = 400) -> tuple:
-    """
-    Búsqueda PARALELA ultra-rápida y enriquecimiento de PDF.
-    """
-    start = time.perf_counter()
-    
-    logging.info(f"🔍 Búsqueda RÁPIDA con {len(query_terms)} términos")
-    logging.info(f"   Términos: {', '.join(query_terms[:5])}...")
-    
-    ss_max = 100
-    pm_max = 100
-    ax_max = 50
-    all_articles = []
-    
-    # 1. Ejecutar las 3 búsquedas en paralelo
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        future_ss = executor.submit(search_semantic_scholar_fast, query_terms, ss_max)
-        future_pm = executor.submit(search_pubmed_fast, query_terms, pm_max)
-        future_ax = executor.submit(search_arxiv_fast, query_terms, ax_max)
+    for i, terms_group in enumerate(term_variations):
+        if len(articles_map) >= target: break
         
-        for future in as_completed([future_ss, future_pm, future_ax]):
+        query = " ".join(terms_group).replace('  ', ' ').strip()
+        logging.info(f"🔬 Semantic Scholar (Estrategia {i+1}): '{query[:60]}...'")
+
+        offset = 0
+        while len(articles_map) < target and offset < 500: 
+            params = {
+                "query": query,
+                "limit": 100,
+                "fields": fields,
+                "openAccessPdf": "true", 
+                "offset": offset
+            }
+
             try:
-                articles = future.result()
-                all_articles.extend(articles)
-            except Exception as e:
-                logging.error(f"❌ Error en búsqueda paralela: {e}")
-    
-    # 2. Eliminar duplicados por título
-    seen_titles = set()
-    unique_articles = []
-    for article in all_articles:
-        title_lower = article["title"].lower().strip()
-        if title_lower and title_lower not in seen_titles:
-            seen_titles.add(title_lower)
-            unique_articles.append(article)
-    
-    # 3. EXTRACCIÓN PARALELA DE PDF (ENRIQUECIMIENTO)
-    articles_to_enrich = [a for a in unique_articles if a.get('pdf_url')]
-    logging.info(f"📄 Iniciando enriquecimiento de {len(articles_to_enrich)} artículos con texto completo...")
-    
-    start_enrich = time.perf_counter()
-    enriched_map = {} # Usaremos un mapa para actualizar la lista original
+                r = requests.get(url, headers=headers, params=params, timeout=15)
+                if r.status_code == 200:
+                    data = r.json()
+                    if not data.get('data'): break 
+                    
+                    added_count = 0
+                    for paper in data['data']:
+                        if not paper.get('openAccessPdf') or not paper.get('openAccessPdf', {}).get('url'): continue
+                        
+                        abstract = paper.get('abstract')
+                        if not abstract or len(abstract) < 150: continue
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        future_to_article = {
-            executor.submit(enrich_article_with_full_text, article): article
-            for article in articles_to_enrich
-        }
-        for future in as_completed(future_to_article):
-            enriched_article = future.result()
-            # Guardar el artículo enriquecido por su título para una actualización fácil
-            enriched_map[enriched_article["title"].lower().strip()] = enriched_article
+                        paper_id = paper.get('paperId')
+                        if paper_id not in articles_map:
+                            # Extracción robusta de metadatos de revista
+                            journal_info = paper.get('journal') or {}
+                            venue = paper.get('venue') or ""
+                            
+                            articles_map[paper_id] = {
+                                "title": paper.get('title', ''),
+                                "authors": [a['name'] for a in paper.get('authors', [])],
+                                "doi": paper.get('externalIds', {}).get('DOI', ''),
+                                "year": paper.get('year') or 0,
+                                "abstract": abstract,
+                                # Datos enriquecidos para BibTeX
+                                "journal": journal_info.get('name', venue),
+                                "volume": journal_info.get('volume', ''),
+                                "issue": journal_info.get('pages', '').split('-')[0] if '-' in journal_info.get('pages', '') else "", # A veces pages trae issue implícito, mejor dejar vacío si no es claro
+                                "pages": journal_info.get('pages', ''),
+                                "url": paper.get('url', ''),
+                                "pdf_url": paper['openAccessPdf']['url'],
+                                "open_access": True,
+                                "source": "Semantic Scholar"
+                            }
+                            added_count += 1
+                    
+                    offset += 100
+                    if added_count == 0: break 
+                else: break
+            except Exception as e:
+                logging.error(f"❌ Semantic Scholar error: {e}")
+                break
+
+    return list(articles_map.values())
+
+# ============================================================
+# ✅ PUBMED (META AJUSTADA: 200) - ¡AHORA CON FULL METADATA!
+# ============================================================
+
+def search_pubmed_oa(term_variations: List[List[str]], target: int = 200) -> List[Dict]:
+    all_articles = []
+    seen_ids = set()
     
-    t_enrich = time.perf_counter() - start_enrich
-    logging.info(f"✅ Enriquecimiento completado en {t_enrich:.2f}s.")
-    
-    # 4. ACTUALIZAR la lista unique_articles con el texto completo
-    final_articles = []
-    for article in unique_articles:
-        title_key = article["title"].lower().strip()
+    for i, terms_group in enumerate(term_variations):
+        if len(all_articles) >= target: break
         
-        if title_key in enriched_map:
-             # Usar el artículo enriquecido (que ahora tiene 'full_text')
-             final_articles.append(enriched_map[title_key])
-        else:
-             # Usar el artículo original (solo con abstract)
-             final_articles.append(article) 
-             
-    # 5. RESUMEN FINAL
-    total_time = time.perf_counter() - start
+        base_query = terms_group[0] if len(terms_group) == 1 else " AND ".join(terms_group)
+        query = f"({base_query}) AND (free full text[sb]) AND (2018:2025[dp])"
+        
+        logging.info(f"🔬 PubMed (Estrategia {i+1}): '{query[:60]}...'")
+        
+        try:
+            retstart = 0
+            while len(all_articles) < target and retstart < 400:
+                handle = Entrez.esearch(db="pubmed", term=query, retmax=100, retstart=retstart, sort="relevance")
+                record = Entrez.read(handle)
+                handle.close()
+                
+                ids = [i for i in record["IdList"] if i not in seen_ids]
+                if not ids: break 
+                seen_ids.update(ids)
+                
+                handle = Entrez.efetch(db="pubmed", id=ids, rettype="abstract", retmode="xml")
+                records = Entrez.read(handle)
+                handle.close()
+                
+                if 'PubmedArticle' not in records: break
+
+                for article in records['PubmedArticle']:
+                    if len(all_articles) >= target: break
+                    
+                    medline = article['MedlineCitation']
+                    article_data = medline['Article']
+                    journal_data = article_data.get('Journal', {})
+                    journal_issue = journal_data.get('JournalIssue', {})
+                    
+                    # Abstract
+                    abstract_text = ""
+                    if 'Abstract' in article_data and 'AbstractText' in article_data['Abstract']:
+                        abs_parts = article_data['Abstract']['AbstractText']
+                        if isinstance(abs_parts, list):
+                            abstract_text = " ".join([str(part) for part in abs_parts])
+                        else:
+                            abstract_text = str(abs_parts)
+                    
+                    if len(abstract_text) < 100: continue
+
+                    title = article_data.get('ArticleTitle', '')
+                    
+                    # Autores
+                    authors = []
+                    if 'AuthorList' in article_data:
+                        for a in article_data['AuthorList']:
+                            if 'LastName' in a and 'ForeName' in a:
+                                authors.append(f"{a['LastName']}, {a['ForeName']}")
+                    
+                    # Año
+                    pub_date = journal_issue.get('PubDate', {})
+                    try:
+                        year = int(pub_date.get('Year', '0'))
+                    except:
+                        year = 2024
+                    
+                    # Identificadores (DOI, PMID)
+                    doi = ""
+                    pmid = medline.get('PMID', '')
+                    if 'ELocationID' in article_data:
+                        for eid in article_data['ELocationID']:
+                            if eid.attributes.get('EIdType') == 'doi':
+                                doi = str(eid)
+
+                    # 🔥 EXTRACCIÓN PROFUNDA DE METADATOS EXTRA 🔥
+                    volume = journal_issue.get('Volume', '')
+                    issue = journal_issue.get('Issue', '')
+                    pages = article_data.get('Pagination', {}).get('MedlinePgn', '')
+                    issn = journal_data.get('ISSN', '')
+                    journal_abbr = journal_data.get('ISOAbbreviation', '')
+                    language = article_data.get('Language', ['eng'])[0]
+                    
+                    all_articles.append({
+                        "title": title,
+                        "abstract": abstract_text,
+                        "year": year,
+                        "authors": authors,
+                        "journal": journal_data.get('Title', ''),
+                        "journal_short": journal_abbr, # Nuevo
+                        "volume": volume, # Nuevo
+                        "issue": issue,   # Nuevo (Number)
+                        "pages": pages,   # Nuevo
+                        "issn": issn,     # Nuevo
+                        "language": language, # Nuevo
+                        "doi": doi, 
+                        "pubmed_id": str(pmid), # Nuevo (útil para URL)
+                        "source": "PubMed",
+                        "open_access": True,
+                        "pdf_url": "" # Se llenará luego con normalize
+                    })
+
+                retstart += 100
+        except Exception as e:
+            logging.error(f"❌ PubMed error: {e}")
+            
+    return all_articles
+
+# ============================================================
+# ✅ ARXIV (META AJUSTADA: 100)
+# ============================================================
+
+def search_arxiv_light(terms_list: List[str], max_results: int = 100) -> List[Dict]:
+    articles = []
+    import urllib.parse
+    import xml.etree.ElementTree as ET
     
-    sources_count = {}
-    for a in final_articles:
-        source = a.get("source", "Unknown")
-        sources_count[source] = sources_count.get(source, 0) + 1
+    if isinstance(terms_list[0], str) and "OR" not in terms_list[0]:
+         query_str = " AND ".join(terms_list[:3])
+    else:
+         query_str = " AND ".join(terms_list)
+
+    url = f"http://export.arxiv.org/api/query?search_query=all:{urllib.parse.quote(query_str)}&start=0&max_results={max_results}"
     
-    logging.info(f"📊 RESUMEN BÚSQUEDA RÁPIDA:")
-    for source, count in sources_count.items():
-        logging.info(f"   - {source}: {count}")
-    logging.info(f"   - Total único (con enriquecimiento): {len(final_articles)} en {total_time:.2f}s")
-    logging.info(f"   ⚡ Velocidad: {len(final_articles)/total_time:.1f} artículos/segundo")
+    try:
+        r = requests.get(url, timeout=20)
+        if r.status_code == 200:
+            root = ET.fromstring(r.content)
+            ns = {'atom': 'http://www.w3.org/2005/Atom', 'arxiv': 'http://arxiv.org/schemas/atom'}
+            for entry in root.findall('atom:entry', ns):
+                title = entry.find('atom:title', ns).text.replace('\n', ' ')
+                summary = entry.find('atom:summary', ns).text.replace('\n', ' ')
+                pub = entry.find('atom:published', ns).text[:4]
+                pdf = entry.find('atom:link[@title="pdf"]', ns)
+                doi_elem = entry.find('arxiv:doi', ns)
+                
+                # Categoría primaria (como "serie")
+                category = entry.find('atom:category', ns)
+                primary_cat = category.attrib['term'] if category is not None else ""
+
+                articles.append({
+                    "title": title,
+                    "abstract": summary,
+                    "year": int(pub),
+                    "source": "arXiv",
+                    "open_access": True,
+                    "pdf_url": pdf.attrib['href'] if pdf is not None else "",
+                    "journal": "arXiv Preprint",
+                    "doi": doi_elem.text if doi_elem is not None else "", # Nuevo: Extrae DOI si existe
+                    "series": primary_cat, # Nuevo: Categoría arXiv como serie
+                    "authors": [a.find('atom:name', ns).text for a in entry.findall('atom:author', ns)]
+                })
+    except Exception as e:
+        logging.error(f"❌ ArXiv error: {e}")
+
+    return articles
+
+# ============================================================
+# FUNCIÓN PRINCIPAL
+# ============================================================
+
+def search_articles(query_terms: List[str], max_results: int = 500) -> tuple:
+    """
+    Meta Total Ajustada: 500-600 candidatos raw -> ~450 únicos.
+    """
+    start_time = time.perf_counter()
+    variations = generate_smart_variations(query_terms)
+    all_articles = []
+
+    logging.info(f"🚀 Búsqueda Masiva Optimizada (Meta: {max_results})")
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        f1 = executor.submit(search_semantic_scholar_oa, variations, 250)
+        f2 = executor.submit(search_pubmed_oa, variations, 200)
+        arxiv_query = variations[0] if variations else query_terms
+        f3 = executor.submit(search_arxiv_light, arxiv_query, 100)
+        
+        for f in as_completed([f1, f2, f3]):
+            try:
+                all_articles.extend(f.result())
+            except Exception as e:
+                logging.error(f"Error hilo búsqueda: {e}")
+
+    # Deduplicación
+    unique = {}
+    for a in all_articles:
+        doi = a.get('doi', '').lower().strip()
+        title_key = "".join(e for e in a.get('title', '').lower() if e.isalnum())[:60]
+        key = doi if len(doi) > 5 else title_key
+        if key and key not in unique:
+            unique[key] = a
+            
+    final_list = list(unique.values())
     
-    return final_articles, total_time
+    if len(final_list) > max_results:
+        final_list = final_list[:max_results]
+        
+    logging.info(f"📚 Total únicos finales: {len(final_list)}")
+
+    # Enriquecimiento PDF "Lazy"
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(enrich_initial_search_result, a) for a in final_list]
+        for f in as_completed(futures): f.result()
+            
+    return final_list, time.perf_counter() - start_time

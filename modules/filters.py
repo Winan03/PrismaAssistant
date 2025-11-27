@@ -1,169 +1,102 @@
-"""
-Filtros PRISMA con manejo robusto de valores None
-"""
 import logging
+from typing import List, Dict, Optional
 
-def apply_filters(
-    articles, 
-    start_year=None, 
-    end_year=None, 
-    doc_type=None, 
-    open_access=False, 
-    language=None,
-    journals=None,
-    quartiles=None
-):
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def is_truly_open_access(article: Dict) -> bool:
     """
-    Aplica filtros de exclusión según criterios PRISMA.
-    
-    Args:
-        articles: Lista de artículos a filtrar
-        start_year: Año mínimo de publicación
-        end_year: Año máximo de publicación
-        doc_type: Tipo de documento (DESACTIVADO - no funcional)
-        open_access: Si True, solo artículos de acceso abierto
-        language: Código de idioma (en, es, pt, etc.)
-        journals: Lista de journals específicos a incluir
-        quartiles: Lista de cuartiles (Q1, Q2, Q3, Q4) - DESACTIVADO por falta de metadata
+    Verifica si un artículo es Open Access usando múltiples señales.
+    Estrategia 'Permisiva': Si el buscador dice que es OA, le creemos.
+    """
+    # 1. Flag explícito puesto por search_engine.py (CRUCIAL)
+    if article.get('open_access') is True:
+        return True
         
-    Returns:
-        Lista de artículos filtrados
-    """
-    filtered = articles
-    initial_count = len(filtered)
-    
-    logging.info(f"🔍 Aplicando filtros a {initial_count} artículos...")
-
-    # 1. Filtro por año de inicio
-    if start_year:
-        filtered = [
-            a for a in filtered 
-            if (a.get("year") or 0) >= start_year
-        ]
-        logging.info(f"   ✅ Año inicio >= {start_year}: {len(filtered)} artículos")
-    
-    # 2. Filtro por año final
-    if end_year:
-        filtered = [
-            a for a in filtered 
-            if (a.get("year") or 0) <= end_year
-        ]
-        logging.info(f"   ✅ Año final <= {end_year}: {len(filtered)} artículos")
-    
-    # 3. Filtro por journals específicos
-    if journals and len(journals) > 0:
-        filtered = [
-            a for a in filtered
-            if a.get("journal", "").strip() in journals
-        ]
-        logging.info(f"   ✅ Journals seleccionados ({len(journals)}): {len(filtered)} artículos")
-    
-    # 4. Filtro por acceso abierto
-    if open_access:
-        filtered = [
-            a for a in filtered 
-            if is_open_access(a)
-        ]
-        logging.info(f"   ✅ Open Access: {len(filtered)} artículos")
-    
-    # 5. Filtro por idioma (heurística basada en abstract)
-    if language:
-        filtered = [
-            a for a in filtered
-            if detect_language(a) == language
-        ]
-        logging.info(f"   ✅ Idioma '{language}': {len(filtered)} artículos")
-    
-    # 6. Filtro por tipo de documento (DESACTIVADO)
-    # Razón: Metadata inconsistente entre APIs
-    if doc_type:
-        logging.warning(f"   ⚠️ Filtro 'doc_type' desactivado (metadata no disponible)")
-        pass
-    
-    # 7. Filtro por cuartiles (DESACTIVADO)
-    # Razón: Semantic Scholar/PubMed no incluyen cuartil en metadata
-    if quartiles and len(quartiles) > 0:
-        logging.warning(f"   ⚠️ Filtro 'quartiles' desactivado (requiere API externa de Scimago)")
-        pass
-    
-    excluded = initial_count - len(filtered)
-    logging.info(f"📊 Filtros aplicados: {len(filtered)} artículos restantes ({excluded} excluidos)")
-    
-    return filtered
-
-
-def is_open_access(article):
-    """
-    Determina si un artículo es de acceso abierto (heurística).
-    
-    Estrategia:
-    - URL contiene "open", "arxiv", "plos", "biorxiv"
-    - DOI empieza con prefijos de editoriales OA conocidas
-    - Campo "isOpenAccess" si está disponible
-    """
-    # 1. Verificar campo explícito (Semantic Scholar)
-    if article.get("isOpenAccess"):
+    # 2. Tiene URL directa al PDF (Prueba definitiva)
+    if article.get('pdf_url') and len(str(article.get('pdf_url', ''))) > 10:
         return True
-    
-    # 2. Verificar URL
-    url = article.get("url", "").lower()
-    oa_indicators = ["open", "arxiv", "plos", "biorxiv", "medrxiv", "ssrn", "researchgate"]
-    if any(indicator in url for indicator in oa_indicators):
+        
+    # 3. Estructura de Semantic Scholar
+    if article.get('openAccessPdf'):
         return True
-    
-    # 3. Verificar DOI de editoriales OA conocidas
-    doi = article.get("doi", "").lower()
-    oa_doi_prefixes = [
-        "10.1371",  # PLOS
-        "10.3389",  # Frontiers
-        "10.1186",  # BioMed Central
-        "10.1038",  # Nature (algunos OA)
-        "10.7554",  # eLife
-    ]
-    if any(doi.startswith(prefix) for prefix in oa_doi_prefixes):
+        
+    # 4. Fuente ArXiv o PMC (Siempre son OA)
+    url = str(article.get('url', '')).lower()
+    source = str(article.get('source', '')).lower()
+    if 'arxiv' in url or 'arxiv' in source:
         return True
-    
+    if 'pmc' in url:
+        return True
+
     return False
 
-
-def detect_language(article):
-    """
-    Detecta el idioma de un artículo (heurística basada en abstract).
+def detect_language(article: Dict) -> Optional[str]:
+    """Heurística simple para detectar idioma si no viene en metadata"""
+    text = (article.get('title', '') + " " + article.get('abstract', '')).lower()
+    if not text.strip(): return None
     
-    Returns:
-        'en', 'es', 'pt', 'fr' o None
-    """
-    abstract = article.get("abstract", "").lower()
-    title = article.get("title", "").lower()
-    text = f"{title} {abstract}"
-    
-    if not text.strip():
-        return None
-    
-    # Palabras clave por idioma
-    english_words = ["the", "and", "of", "in", "to", "with", "for", "this", "that", "was"]
-    spanish_words = ["de", "la", "el", "en", "los", "las", "con", "por", "para", "que"]
-    portuguese_words = ["da", "do", "em", "para", "com", "uma", "dos", "das", "pela", "pelo"]
-    french_words = ["le", "de", "et", "la", "un", "une", "des", "les", "dans", "pour"]
-    
-    # Contar coincidencias
-    en_count = sum(1 for word in english_words if f" {word} " in text)
-    es_count = sum(1 for word in spanish_words if f" {word} " in text)
-    pt_count = sum(1 for word in portuguese_words if f" {word} " in text)
-    fr_count = sum(1 for word in french_words if f" {word} " in text)
-    
-    # Determinar idioma dominante
-    counts = {
-        'en': en_count,
-        'es': es_count,
-        'pt': pt_count,
-        'fr': fr_count
+    common_words = {
+        'en': ['the', 'and', 'with', 'for', 'study'],
+        'es': ['el', 'la', 'con', 'para', 'estudio'],
+        'pt': ['o', 'a', 'com', 'para', 'estudo']
     }
     
-    max_lang = max(counts, key=counts.get)
+    scores = {lang: sum(1 for w in words if f" {w} " in text) for lang, words in common_words.items()}
+    return max(scores, key=scores.get) if any(scores.values()) else 'en'
+
+def apply_filters(
+    articles: List[Dict],
+    start_year: Optional[int] = None,
+    end_year: Optional[int] = None,
+    open_access: bool = False,
+    language: Optional[str] = None,
+    journals: Optional[List[str]] = None,
+    quartiles: Optional[List[str]] = None
+) -> List[Dict]:
+    """
+    Aplica filtros físicos a la lista de artículos.
+    """
+    if not articles:
+        return []
+        
+    filtered = articles
+    initial_count = len(filtered)
+
+    # 1. Filtro de Año (Robusto ante valores no numéricos)
+    def get_year(art):
+        try: return int(art.get('year', 0))
+        except: return 0
+
+    if start_year:
+        filtered = [a for a in filtered if get_year(a) >= start_year]
+    if end_year:
+        filtered = [a for a in filtered if get_year(a) <= end_year]
     
-    # Solo retornar si hay al menos 3 coincidencias
-    if counts[max_lang] >= 3:
-        return max_lang
-    
-    return None
+    logging.info(f"   ✅ Año {start_year}-{end_year}: {len(filtered)} artículos")
+
+    # 2. Filtro Open Access (Lógica Mejorada)
+    if open_access:
+        # Usamos la nueva función permisiva
+        oa_filtered = [a for a in filtered if is_truly_open_access(a)]
+        
+        # Safety Check: Si el filtro mata todo, avisamos
+        if len(oa_filtered) == 0 and len(filtered) > 0:
+            logging.warning("⚠️ ALERTA: El filtro OA eliminó todos los artículos. Verifica search_engine.py.")
+        
+        filtered = oa_filtered
+        logging.info(f"   ✅ Open Access: {len(filtered)} artículos")
+
+    # 3. Filtro Idioma
+    if language and language != 'all':
+        filtered = [a for a in filtered if detect_language(a) == language]
+
+    # 4. Filtro Revistas
+    if journals:
+        target_journals = {j.lower().strip() for j in journals}
+        filtered = [
+            a for a in filtered 
+            if a.get('journal') and str(a.get('journal')).lower().strip() in target_journals
+        ]
+
+    logging.info(f"📊 Filtros aplicados: {len(filtered)} restantes (de {initial_count})")
+    return filtered

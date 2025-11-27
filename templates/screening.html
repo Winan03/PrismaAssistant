@@ -14,7 +14,6 @@
       background: linear-gradient(135deg, #1e3a8a 0%, #5b21b6 50%, #059669 100%);
     }
     
-    /* Layout con Sidebar Fijo */
     .app-layout { display: flex; height: 100vh; flex-direction: column; }
     .main-content { flex: 1; display: flex; overflow: hidden; }
     .table-area { flex: 1; overflow-y: auto; padding: 24px; }
@@ -29,7 +28,6 @@
       box-shadow: -4px 0 20px rgba(0,0,0,0.05);
     }
 
-    /* Tarjetas de Artículos */
     .paper-card {
       background: white;
       border-radius: 12px;
@@ -40,13 +38,11 @@
     }
     .paper-card:hover { box-shadow: 0 8px 20px rgba(0,0,0,0.08); transform: translateY(-2px); }
 
-    /* Barra de Estado Lateral */
     .status-bar { width: 6px; background: #cbd5e1; }
     .paper-card.included .status-bar { background: #10b981; }
     .paper-card.excluded .status-bar { background: #ef4444; opacity: 0.5; }
     .paper-card.excluded { opacity: 0.6; background: #f8fafc; }
 
-    /* Columnas IA */
     .ai-container {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -72,7 +68,6 @@
       gap: 6px;
     }
 
-    /* Botones Sidebar */
     .col-btn {
       width: 100%;
       padding: 12px 16px;
@@ -93,7 +88,6 @@
     .col-btn.active { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; }
     .col-btn i { width: 20px; margin-right: 10px; }
 
-    /* Relevancia con Colores */
     .relevance-badge {
       font-size: 0.85rem;
       font-weight: 700;
@@ -107,9 +101,15 @@
     .relevance-medium { background: #fef3c7; color: #92400e; border: 2px solid #f59e0b; }
     .relevance-low { background: #fee2e2; color: #991b1b; border: 2px solid #ef4444; }
 
-    /* Animaciones */
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .fade-in { animation: fadeIn 0.4s ease-out; }
+    
+    /* NUEVO: Indicador de carga */
+    .loading-indicator {
+      text-align: center;
+      padding: 40px;
+      color: #64748b;
+    }
   </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-indigo-50">
@@ -124,7 +124,7 @@
       </div>
       <div>
         <h1 class="text-2xl font-bold leading-none">Cribado Manual de Artículos</h1>
-        <p class="text-sm text-emerald-100 mt-1">{{ articles|length }} artículos candidatos (>= 70% relevancia)</p>
+        <p class="text-sm text-emerald-100 mt-1"><span id="total-articles-count">{{ articles|length }}</span> artículos candidatos (>= 70% relevancia)</p>
       </div>
     </div>
     
@@ -144,7 +144,11 @@
     <!-- ÁREA DE ARTÍCULOS -->
     <div class="table-area">
       <div class="max-w-6xl mx-auto" id="articles-list">
-        <!-- Artículos se generan dinámicamente -->
+        <!-- Indicador de carga inicial -->
+        <div class="loading-indicator" id="loading-indicator">
+          <i class="fas fa-spinner fa-spin text-4xl text-indigo-500 mb-4"></i>
+          <p class="text-lg font-semibold">Cargando artículos...</p>
+        </div>
       </div>
     </div>
 
@@ -160,6 +164,8 @@
 
       <div class="mb-8">
         <h3 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-4">Agregar Columnas IA</h3>
+        
+        <!-- Columnas Básicas -->
         <button onclick="addColumn('summary')" id="btn-summary" class="col-btn">
           <i class="fas fa-align-left text-blue-500"></i> Resumen (Español)
         </button>
@@ -167,8 +173,23 @@
           <i class="fas fa-microscope text-purple-500"></i> Metodología
         </button>
         <button onclick="addColumn('population')" id="btn-population" class="col-btn">
-          <i class="fas fa-users text-orange-500"></i> Población
+          <i class="fas fa-users text-orange-500"></i> Población / Datasets
         </button>
+        
+        <!-- Nuevas Columnas Avanzadas -->
+        <button onclick="addColumn('study_design')" id="btn-study_design" class="col-btn">
+          <i class="fas fa-project-diagram text-cyan-600"></i> Diseño del Estudio
+        </button>
+        <button onclick="addColumn('objectives')" id="btn-objectives" class="col-btn">
+          <i class="fas fa-bullseye text-emerald-600"></i> Objetivos
+        </button>
+        <button onclick="addColumn('independent_variables')" id="btn-independent_variables" class="col-btn">
+          <i class="fas fa-sliders-h text-indigo-500"></i> Variables Indep.
+        </button>
+        <button onclick="addColumn('dependent_variables')" id="btn-dependent_variables" class="col-btn">
+          <i class="fas fa-chart-line text-pink-500"></i> Variables Dep.
+        </button>
+
         <button onclick="addColumn('key_findings')" id="btn-key_findings" class="col-btn">
           <i class="fas fa-lightbulb text-yellow-500"></i> Hallazgos Clave
         </button>
@@ -193,35 +214,124 @@
 </div>
 
 <script>
+  // ============================================================
+  // 🔥 CARGA DE DATOS CON VALIDACIÓN ROBUSTA
+  // ============================================================
   let articlesData = [];
-  try {
-    articlesData = {{ articles | tojson | safe }};
-    console.log("✅ Artículos cargados:", articlesData.length);
-  } catch (e) {
-    console.error("❌ Error cargando datos:", e);
-    alert("Error crítico al cargar artículos");
+  
+  // Función para escapar HTML y prevenir XSS
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
-  let activeColumns = [];
-  let taskQueue = [];
-  let isProcessing = false;
-  let totalTasks = 0;
-  let completedTasks = 0;
-  let decisions = new Set();
+  // Intentar cargar artículos con múltiples estrategias
+  function loadArticles() {
+    try {
+      // Estrategia 1: JSON directo desde Jinja2
+      const rawData = {{ articles | tojson | safe }};
+      
+      if (!rawData || !Array.isArray(rawData)) {
+        throw new Error("Datos no válidos desde el servidor");
+      }
+      
+      articlesData = rawData;
+      console.log("✅ Artículos cargados correctamente:", articlesData.length);
+      
+      // Validar que cada artículo tenga las propiedades mínimas
+      articlesData = articlesData.filter(art => {
+        if (!art || typeof art !== 'object') return false;
+        if (!art.title || art.title.length < 5) return false;
+        return true;
+      });
+      
+      console.log("✅ Artículos válidos después de filtrado:", articlesData.length);
+      
+      if (articlesData.length === 0) {
+        throw new Error("No hay artículos válidos para mostrar");
+      }
+      
+      return true;
+      
+    } catch (e) {
+      console.error("❌ Error crítico cargando datos:", e);
+      
+      // Mostrar error en la UI
+      const container = document.getElementById('articles-list');
+      container.innerHTML = `
+        <div class="bg-red-50 border-2 border-red-200 rounded-xl p-8 text-center">
+          <i class="fas fa-exclamation-circle text-red-500 text-5xl mb-4"></i>
+          <h2 class="text-xl font-bold text-red-700 mb-2">Error al Cargar Artículos</h2>
+          <p class="text-red-600 mb-4">${escapeHtml(e.message)}</p>
+          <button onclick="location.reload()" class="bg-red-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-600">
+            <i class="fas fa-redo mr-2"></i> Recargar Página
+          </button>
+        </div>
+      `;
+      
+      return false;
+    }
+  }
 
-  // RENDERIZADO INICIAL
-  const container = document.getElementById('articles-list');
-  articlesData.forEach((article, index) => {
+  // ============================================================
+  // 🎨 RENDERIZADO DE ARTÍCULOS
+  // ============================================================
+  function renderArticles() {
+    const container = document.getElementById('articles-list');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    
+    if (!articlesData || articlesData.length === 0) {
+      container.innerHTML = `
+        <div class="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-8 text-center">
+          <i class="fas fa-inbox text-yellow-500 text-5xl mb-4"></i>
+          <h2 class="text-xl font-bold text-yellow-700">No hay artículos para revisar</h2>
+          <p class="text-yellow-600 mt-2">Intenta ajustar los filtros de búsqueda</p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Remover indicador de carga
+    if (loadingIndicator) {
+      loadingIndicator.remove();
+    }
+    
+    // Renderizar cada artículo
+    articlesData.forEach((article, index) => {
+      const card = createArticleCard(article, index);
+      container.appendChild(card);
+    });
+    
+    console.log(`✅ Renderizados ${articlesData.length} artículos en el DOM`);
+  }
+
+  function createArticleCard(article, index) {
     const card = document.createElement('div');
     card.className = 'paper-card flex fade-in';
     card.id = `card-${index}`;
-    card.style.animationDelay = `${index * 0.05}s`;
+    card.style.animationDelay = `${Math.min(index * 0.05, 2)}s`; // Max 2s delay
     
+    // Calcular relevancia
     const percent = Math.round((article.similarity || 0) * 100);
     let relevanceClass = 'relevance-low';
     let relevanceIcon = '❌';
-    if (percent >= 85) { relevanceClass = 'relevance-high'; relevanceIcon = '✅'; }
-    else if (percent >= 70) { relevanceClass = 'relevance-medium'; relevanceIcon = '⚠️'; }
+    if (percent >= 85) { 
+      relevanceClass = 'relevance-high'; 
+      relevanceIcon = '✅'; 
+    } else if (percent >= 70) { 
+      relevanceClass = 'relevance-medium'; 
+      relevanceIcon = '⚠️'; 
+    }
+    
+    // Sanitizar datos
+    const title = escapeHtml(article.title || 'Sin título');
+    const year = escapeHtml(String(article.year || 'N/D'));
+    const authors = Array.isArray(article.authors) 
+      ? article.authors.slice(0, 2).map(a => escapeHtml(a)).join(', ')
+      : 'Autores no disponibles';
+    const journal = article.journal ? escapeHtml(article.journal) : '';
+    const abstract = escapeHtml(article.abstract || 'Abstract no disponible');
     
     card.innerHTML = `
       <div class="status-bar"></div>
@@ -230,14 +340,14 @@
           <div class="flex justify-between items-start gap-6">
             <div class="flex-1">
               <h3 class="text-xl font-bold text-slate-800 mb-3 leading-tight hover:text-indigo-600 transition cursor-pointer">
-                ${article.title}
+                ${title}
               </h3>
               <div class="flex flex-wrap gap-3 text-sm text-slate-500 mb-4">
                 <span class="bg-slate-100 px-3 py-1 rounded-lg font-semibold text-slate-700">
-                  <i class="fas fa-calendar mr-1"></i> ${article.year || 'N/D'}
+                  <i class="fas fa-calendar mr-1"></i> ${year}
                 </span>
-                <span><i class="fas fa-users mr-1"></i> ${(article.authors || []).slice(0,2).join(', ')}</span>
-                ${article.journal ? `<span class="italic text-xs">${article.journal}</span>` : ''}
+                <span><i class="fas fa-users mr-1"></i> ${authors}</span>
+                ${journal ? `<span class="italic text-xs">${journal}</span>` : ''}
                 <span class="relevance-badge ${relevanceClass}">
                   ${relevanceIcon} ${percent}% Relevancia
                 </span>
@@ -249,7 +359,7 @@
                   Ver Abstract Original
                 </summary>
                 <div class="mt-3 text-slate-600 leading-relaxed text-sm pl-4 border-l-4 border-slate-200">
-                  ${article.abstract || 'No disponible'}
+                  ${abstract}
                   <div id="translation-box-${index}" class="hidden"></div>
                 </div>
               </details>
@@ -270,12 +380,39 @@
         <div id="ai-container-${index}" class="ai-container hidden"></div>
       </div>
     `;
-    container.appendChild(card);
+    
+    return card;
+  }
+
+  // ============================================================
+  // 🚀 INICIALIZACIÓN
+  // ============================================================
+  let activeColumns = [];
+  let taskQueue = [];
+  let isProcessing = false;
+  let totalTasks = 0;
+  let completedTasks = 0;
+  let decisions = new Set();
+
+  // Inicializar cuando el DOM esté listo
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log("🚀 Inicializando aplicación...");
+    
+    const success = loadArticles();
+    if (success) {
+      renderArticles();
+    }
   });
 
+  // ============================================================
   // AGREGAR COLUMNA
+  // ============================================================
   window.addColumn = function(colName) {
-    if (activeColumns.includes(colName)) return;
+    if (activeColumns.includes(colName)) {
+      console.log(`⚠️ Columna '${colName}' ya está activa`);
+      return;
+    }
+    
     activeColumns.push(colName);
 
     const btn = document.getElementById(`btn-${colName}`);
@@ -317,12 +454,19 @@
       'population': { title: 'Población', icon: 'fas fa-users', color: 'text-orange-500' },
       'key_findings': { title: 'Hallazgos', icon: 'fas fa-lightbulb', color: 'text-yellow-500' },
       'limitations': { title: 'Limitaciones', icon: 'fas fa-exclamation-triangle', color: 'text-red-500' },
-      'summary': { title: 'Resumen', icon: 'fas fa-align-left', color: 'text-blue-500' }
+      'summary': { title: 'Resumen', icon: 'fas fa-align-left', color: 'text-blue-500' },
+      // Nuevas columnas
+      'study_design': { title: 'Diseño', icon: 'fas fa-project-diagram', color: 'text-cyan-600' },
+      'objectives': { title: 'Objetivos', icon: 'fas fa-bullseye', color: 'text-emerald-600' },
+      'independent_variables': { title: 'Vars. Indep.', icon: 'fas fa-sliders-h', color: 'text-indigo-500' },
+      'dependent_variables': { title: 'Vars. Dep.', icon: 'fas fa-chart-line', color: 'text-pink-500' }
     };
     return map[col] || { title: col, icon: 'fas fa-robot', color: 'text-gray-500' };
   }
 
+  // ============================================================
   // TRADUCCIÓN
+  // ============================================================
   window.translateAllAbstracts = function() {
     const btn = document.getElementById('btn-translate-all');
     btn.classList.add('active');
@@ -337,7 +481,9 @@
     processQueue();
   };
 
+  // ============================================================
   // PROCESADOR DE COLA
+  // ============================================================
   async function processQueue() {
     if (isProcessing || taskQueue.length === 0) {
       updateQueueUI();
@@ -352,14 +498,14 @@
       if (task.type === 'column') await fetchAIColumn(task);
       if (task.type === 'translate') await fetchTranslation(task);
     } catch (e) {
-      console.error("Error en tarea:", e);
+      console.error("❌ Error en tarea:", e);
     }
 
     completedTasks++;
     setTimeout(() => {
       isProcessing = false;
       processQueue();
-    }, 1500);
+    }, 800); // Reducido de 1500ms a 800ms
   }
 
   function updateQueueUI(state = "idle") {
@@ -381,12 +527,15 @@
     bar.style.width = `${percent}%`;
   }
 
+  // ============================================================
   // LLAMADAS AJAX
+  // ============================================================
   async function fetchAIColumn(task) {
     const cell = document.getElementById(task.cellId);
     if(!cell) return;
     
-    cell.querySelector('div').innerHTML = `<i class="fas fa-brain text-indigo-500 animate-bounce"></i> Analizando...`;
+    // Indicador de carga
+    cell.querySelector('div').innerHTML = `<div class="flex items-center gap-2 text-indigo-600"><i class="fas fa-circle-notch fa-spin"></i> Analizando...</div>`;
 
     try {
       const response = await fetch('/generate_column', {
@@ -394,20 +543,40 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           article: articlesData[task.articleId], 
-          column_name: task.columnName 
+          column_name: task.columnName,
+          question: "{{ question }}"
         })
       });
 
       if(response.ok) {
         const data = await response.json();
-        cell.querySelector('div').className = "text-slate-700 mt-1";
-        cell.querySelector('div').innerHTML = data.value;
+        const contentDiv = cell.querySelector('div');
         
+        // ✅ CORRECCIÓN VISUAL:
+        // 1. Usamos una clase que permita saltos de línea y buen espaciado
+        contentDiv.className = "text-slate-700 mt-2 text-sm leading-relaxed prose prose-sm max-w-none";
+        
+        // 2. Inyectamos como HTML real. El backend ya envía <b> y <br>.
+        contentDiv.innerHTML = data.value; 
+        
+        // Guardar en datos locales
         if(!articlesData[task.articleId].ai_data) articlesData[task.articleId].ai_data = {};
         articlesData[task.articleId].ai_data[task.columnName] = data.value;
+      } else {
+        throw new Error(`HTTP ${response.status}`);
       }
     } catch(e) {
-      cell.querySelector('div').innerHTML = `<span class="text-red-400">Error</span>`;
+      console.error("❌ Error generando columna:", e);
+      // Mensaje de error amigable
+      cell.querySelector('div').innerHTML = `<div class="text-amber-600 text-xs bg-amber-50 p-2 rounded border border-amber-200 mt-1"><i class="fas fa-exclamation-triangle"></i> No se pudo analizar. Reintentando...</div>`;
+      
+      // Opcional: Reintentar automáticamente después de 3 segundos
+      setTimeout(() => {
+          // Solo reintentar si sigue mostrando error (para evitar bucles infinitos si es error fatal)
+          if(cell.querySelector('div').innerText.includes("No se pudo analizar")) {
+              fetchAIColumn(task); 
+          }
+      }, 3000);
     }
   }
 
@@ -433,15 +602,24 @@
       if(response.ok) {
         const data = await response.json();
         box.className = "mt-3 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500";
-        box.innerHTML = `<strong class="text-blue-700">[ES]</strong> <span class="text-slate-700">${data.translation}</span>`;
+        box.innerHTML = `<strong class="text-blue-700">[ES]</strong> <span class="text-slate-700">${escapeHtml(data.translation)}</span>`;
         articlesData[task.articleId].translation = data.translation;
+      } else {
+        throw new Error(`HTTP ${response.status}`);
       }
-    } catch(e) { console.error(e); }
+    } catch(e) { 
+      console.error("❌ Error traduciendo:", e);
+      box.innerHTML = `<span class="text-red-400">Error de traducción</span>`;
+    }
   }
 
+  // ============================================================
   // DECISIONES
+  // ============================================================
   window.setDecision = function(id, decision) {
     const card = document.getElementById(`card-${id}`);
+    if (!card) return;
+    
     card.classList.remove('included', 'excluded');
     
     if (decision === 'included') {
@@ -454,15 +632,17 @@
     document.getElementById('count-included').innerText = decisions.size;
   };
 
+  // ============================================================
   // FINALIZAR
+  // ============================================================
   window.submitScreening = async function() {
     if (decisions.size === 0) {
-      if(!confirm("No has incluido ningún artículo. ¿Continuar?")) return;
+      if(!confirm("No has incluido ningún artículo. ¿Continuar de todas formas?")) return;
     }
     
     const btn = document.querySelector('button[onclick="submitScreening()"]');
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando decisiones...';
 
     let payload = {
       sessionId: "{{ session_id }}",
@@ -473,8 +653,8 @@
     articlesData.forEach((art, idx) => {
       let status = 'pending';
       const card = document.getElementById(`card-${idx}`);
-      if (card.classList.contains('included')) status = 'included';
-      if (card.classList.contains('excluded')) status = 'excluded';
+      if (card && card.classList.contains('included')) status = 'included';
+      if (card && card.classList.contains('excluded')) status = 'excluded';
 
       payload.articles[idx] = {
         status: status,
@@ -490,13 +670,19 @@
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload)
       });
+      
       if(res.ok) {
         const html = await res.text();
-        document.open(); document.write(html); document.close();
+        document.open(); 
+        document.write(html); 
+        document.close();
+      } else {
+        throw new Error(`Error del servidor: ${res.status}`);
       }
     } catch(e) {
-      alert("Error de conexión");
+      alert(`Error de conexión: ${e.message}`);
       btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-arrow-right"></i> Finalizar Revisión';
     }
   };
 </script>
