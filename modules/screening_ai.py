@@ -316,43 +316,60 @@ LAST_CALL_TIMESTAMP = 0
 REQUEST_INTERVAL = 2.5  # Reducido para mayor velocidad
 
 def call_ai_api(messages: List[Dict], max_tokens: int = 600) -> Dict:
-    """Llama a la API con manejo robusto de errores"""
+    """Llama a Puter.js API (gratuita e ilimitada)"""
     global LAST_CALL_TIMESTAMP
     
     elapsed = time.time() - LAST_CALL_TIMESTAMP
-    if elapsed < REQUEST_INTERVAL:
-        time.sleep(REQUEST_INTERVAL - elapsed)
+    if elapsed < 1.0:  # Reducido a 1 segundo
+        time.sleep(1.0 - elapsed)
     
-    max_retries = 5
-    base_wait = 3
+    max_retries = 3
     
     for attempt in range(max_retries):
         try:
             LAST_CALL_TIMESTAMP = time.time()
             
-            response = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=messages,
-                temperature=0.05,  # Más determinístico
-                max_tokens=max_tokens,
-                response_format={"type": "json_object"}
-            )
-            content = response.choices[0].message.content
-            return json.loads(content)
+            # Construir prompt combinado (Puter espera texto plano)
+            system_msg = next((m['content'] for m in messages if m['role'] == 'system'), '')
+            user_msg = next((m['content'] for m in messages if m['role'] == 'user'), '')
+            combined_prompt = f"{system_msg}\n\n{user_msg}\n\nResponde SOLO con JSON válido."
             
-        except RateLimitError:
-            wait_time = base_wait * (2 ** attempt)
-            logging.warning(f"⏳ Límite de velocidad (429). Pausando {wait_time}s...")
-            time.sleep(wait_time)
-            continue
+            # Llamada a Puter.js API
+            response = requests.post(
+                "https://api.puter.com/ai/chat",  # Endpoint correcto (verifica docs)
+                json={
+                    "prompt": combined_prompt,
+                    "model": "gpt-4o-mini",  # o "gpt-5-nano" según tus necesidades
+                    "temperature": 0.05,
+                    "max_tokens": max_tokens
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                # Puter devuelve la respuesta en data['response'] o data['text']
+                content = data.get('response') or data.get('text') or data.get('content', '')
+                
+                # Limpiar markdown si viene con ```json
+                content = content.replace('```json', '').replace('```', '').strip()
+                
+                return json.loads(content)
+            else:
+                logging.warning(f"⚠️ Puter API error {response.status_code}: {response.text}")
+                time.sleep(2)
+                continue
+                
+        except requests.Timeout:
+            logging.warning(f"⏳ Timeout en intento {attempt + 1}")
+            time.sleep(3)
             
         except json.JSONDecodeError as e:
-            logging.error(f"❌ Respuesta no es JSON válido: {e}")
+            logging.error(f"❌ Respuesta no JSON: {content[:200]}")
             return None
             
         except Exception as e:
-            logging.error(f"❌ Error API ({MODEL_NAME}): {e}")
-            time.sleep(3)
+            logging.error(f"❌ Error Puter API: {e}")
             if attempt == max_retries - 1:
                 return None
                 
@@ -432,6 +449,35 @@ def format_response_for_html(column: str, data: Dict) -> str:
         html += "</div>"
         return html
     
+    # ✅ STUDY DESIGN (NUEVO - ARREGLADO)
+    if column == "study_design":
+        tipo = data.get("tipo", "No especificado")
+        justif = data.get("justificacion", "")
+        
+        html = "<div class='text-sm text-slate-700 space-y-2'>"
+        html += f"<div><span class='font-semibold text-indigo-600'>Tipo:</span> <span class='font-medium'>{tipo}</span></div>"
+        
+        if justif and "No especificado" not in justif:
+            # ✅ CLAVE: Agregamos word-wrap inline para justificación larga
+            html += f"<div class='text-slate-600 italic text-xs leading-relaxed' style='word-wrap: break-word; overflow-wrap: break-word;'>\"{justif}\"</div>"
+        
+        html += "</div>"
+        return html
+    
+    # ✅ OBJECTIVES (NUEVO)
+    if column == "objectives":
+        objetivos = data.get("objetivos", [])
+        
+        if not objetivos or objetivos == ["No especificado"]:
+            return "<div class='text-gray-400 text-xs italic'>No identificados.</div>"
+        
+        html = "<ul class='text-sm text-slate-700 space-y-1.5 list-disc list-inside'>"
+        for obj in objetivos:
+            if "No especificado" not in obj:
+                html += f"<li class='leading-relaxed' style='word-wrap: break-word;'>{obj}</li>"
+        html += "</ul>"
+        return html
+    
     # INDEPENDENT VARIABLES
     if column == "independent_variables":
         variables = data.get("variables", [])
@@ -444,7 +490,7 @@ def format_response_for_html(column: str, data: Dict) -> str:
             nombre = v.get("nombre", "")
             valores = v.get("valores", "")
             if nombre and "No especificado" not in nombre:
-                html += f"<li><span class='font-semibold'>{nombre}</span>: {valores}</li>"
+                html += f"<li style='word-wrap: break-word;'><span class='font-semibold'>{nombre}</span>: {valores}</li>"
         html += "</ul>"
         return html
     
@@ -460,7 +506,7 @@ def format_response_for_html(column: str, data: Dict) -> str:
             nombre = m.get("nombre", "")
             valor = m.get("valor", "")
             if nombre and "No especificado" not in nombre:
-                html += f"<li><span class='font-semibold'>{nombre}</span>: {valor}</li>"
+                html += f"<li style='word-wrap: break-word;'><span class='font-semibold'>{nombre}</span>: {valor}</li>"
         html += "</ul>"
         return html
     
@@ -475,7 +521,7 @@ def format_response_for_html(column: str, data: Dict) -> str:
         for h in hallazgos:
             resultado = h.get("resultado", "")
             if resultado and "No especificado" not in resultado:
-                html += f"<div>• {resultado}</div>"
+                html += f"<div style='word-wrap: break-word;'>• {resultado}</div>"
         html += "</div>"
         return html
     
@@ -489,12 +535,12 @@ def format_response_for_html(column: str, data: Dict) -> str:
         html = "<ul class='text-sm text-slate-700 space-y-1 list-disc list-inside'>"
         for lim in limitaciones:
             if "No especificado" not in lim:
-                html += f"<li>{lim}</li>"
+                html += f"<li style='word-wrap: break-word;'>{lim}</li>"
         html += "</ul>"
         return html
     
-    # FALLBACK GENÉRICO
-    return f"<pre class='text-xs text-slate-600'>{json.dumps(data, indent=2, ensure_ascii=False)}</pre>"
+    # FALLBACK GENÉRICO (con word-wrap)
+    return f"<pre class='text-xs text-slate-600' style='white-space: pre-wrap; word-wrap: break-word;'>{json.dumps(data, indent=2, ensure_ascii=False)}</pre>"
 
 
 # ============================================================

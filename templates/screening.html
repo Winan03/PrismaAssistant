@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cribado Manual - PRISMA Assistant</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- ✅ AGREGAR PUTER.JS - SIN RATE LIMITS -->
-  <script src="https://js.puter.com/v2/"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
@@ -53,16 +51,22 @@
       border-top: 1px solid #e2e8f0;
     }
     
-    /* ✅ ARREGLO CRÍTICO: Permitir word-wrap en celdas de IA */
+    /* ✅ ARREGLADO: Permite saltos de línea y scroll si es muy largo */
     .ai-cell {
       background: #f8fafc;
       padding: 16px;
       font-size: 0.9rem;
       line-height: 1.6;
       color: #334155;
+      
+      /* ✅ CRÍTICO: Evita cortes de texto */
       word-wrap: break-word;
       overflow-wrap: break-word;
       white-space: normal;
+      
+      /* ✅ Scroll si el contenido es muy largo (más de 400px) */
+      max-height: 400px;
+      overflow-y: auto;
     }
     
     .ai-cell h5 {
@@ -112,10 +116,27 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .fade-in { animation: fadeIn 0.4s ease-out; }
     
+    /* NUEVO: Indicador de carga */
     .loading-indicator {
       text-align: center;
       padding: 40px;
       color: #64748b;
+    }
+    
+    /* ✅ BONUS: Estilo para scrollbar personalizada en .ai-cell */
+    .ai-cell::-webkit-scrollbar {
+      width: 6px;
+    }
+    .ai-cell::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 10px;
+    }
+    .ai-cell::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 10px;
+    }
+    .ai-cell::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
     }
   </style>
 </head>
@@ -151,6 +172,7 @@
     <!-- ÁREA DE ARTÍCULOS -->
     <div class="table-area">
       <div class="max-w-6xl mx-auto" id="articles-list">
+        <!-- Indicador de carga inicial -->
         <div class="loading-indicator" id="loading-indicator">
           <i class="fas fa-spinner fa-spin text-4xl text-indigo-500 mb-4"></i>
           <p class="text-lg font-semibold">Cargando artículos...</p>
@@ -162,7 +184,7 @@
     <div class="sidebar">
       
       <div class="mb-8">
-        <h3 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-4">🚀 Modo: Puter.js (Sin Límites)</h3>
+        <h3 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-4">Herramientas Globales</h3>
         <button onclick="translateAllAbstracts()" id="btn-translate-all" class="col-btn">
           <i class="fas fa-language text-blue-500"></i> Traducir Todos los Abstracts
         </button>
@@ -171,6 +193,7 @@
       <div class="mb-8">
         <h3 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-4">Agregar Columnas IA</h3>
         
+        <!-- Columnas Básicas -->
         <button onclick="addColumn('summary')" id="btn-summary" class="col-btn">
           <i class="fas fa-align-left text-blue-500"></i> Resumen (Español)
         </button>
@@ -181,6 +204,7 @@
           <i class="fas fa-users text-orange-500"></i> Población / Datasets
         </button>
         
+        <!-- Nuevas Columnas Avanzadas -->
         <button onclick="addColumn('study_design')" id="btn-study_design" class="col-btn">
           <i class="fas fa-project-diagram text-cyan-600"></i> Diseño del Estudio
         </button>
@@ -204,7 +228,7 @@
 
       <div class="mt-auto bg-slate-50 p-4 rounded-xl border border-slate-100">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-bold text-slate-600">Puter.js IA</span>
+          <span class="text-xs font-bold text-slate-600">Agente IA</span>
           <div class="w-2.5 h-2.5 rounded-full bg-slate-300" id="agent-status-dot"></div>
         </div>
         <p class="text-xs text-slate-400 truncate" id="queue-status">Inactivo</p>
@@ -219,49 +243,51 @@
 
 <script>
   // ============================================================
-  // 🔥 VARIABLES GLOBALES
+  // 🔥 CARGA DE DATOS CON VALIDACIÓN ROBUSTA
   // ============================================================
   let articlesData = [];
-  let activeColumns = [];
-  let taskQueue = [];
-  let isProcessing = false;
-  let totalTasks = 0;
-  let completedTasks = 0;
-  let decisions = new Set();
   
-  // ============================================================
-  // 🔥 CARGA DE DATOS
-  // ============================================================
-  
+  // Función para escapar HTML y prevenir XSS
   function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
   }
 
+  // Intentar cargar artículos con múltiples estrategias
   function loadArticles() {
     try {
+      // Estrategia 1: JSON directo desde Jinja2
       const rawData = {{ articles | tojson | safe }};
       
       if (!rawData || !Array.isArray(rawData)) {
         throw new Error("Datos no válidos desde el servidor");
       }
       
-      articlesData = rawData.filter(art => {
-        return art && typeof art === 'object' && art.title && art.title.length >= 5;
+      articlesData = rawData;
+      console.log("✅ Artículos cargados correctamente:", articlesData.length);
+      
+      // Validar que cada artículo tenga las propiedades mínimas
+      articlesData = articlesData.filter(art => {
+        if (!art || typeof art !== 'object') return false;
+        if (!art.title || art.title.length < 5) return false;
+        return true;
       });
       
-      console.log("✅ Artículos cargados:", articlesData.length);
+      console.log("✅ Artículos válidos después de filtrado:", articlesData.length);
       
       if (articlesData.length === 0) {
-        throw new Error("No hay artículos válidos");
+        throw new Error("No hay artículos válidos para mostrar");
       }
       
       return true;
       
     } catch (e) {
-      console.error("❌ Error cargando datos:", e);
-      document.getElementById('articles-list').innerHTML = `
+      console.error("❌ Error crítico cargando datos:", e);
+      
+      // Mostrar error en la UI
+      const container = document.getElementById('articles-list');
+      container.innerHTML = `
         <div class="bg-red-50 border-2 border-red-200 rounded-xl p-8 text-center">
           <i class="fas fa-exclamation-circle text-red-500 text-5xl mb-4"></i>
           <h2 class="text-xl font-bold text-red-700 mb-2">Error al Cargar Artículos</h2>
@@ -271,6 +297,7 @@
           </button>
         </div>
       `;
+      
       return false;
     }
   }
@@ -287,27 +314,33 @@
         <div class="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-8 text-center">
           <i class="fas fa-inbox text-yellow-500 text-5xl mb-4"></i>
           <h2 class="text-xl font-bold text-yellow-700">No hay artículos para revisar</h2>
+          <p class="text-yellow-600 mt-2">Intenta ajustar los filtros de búsqueda</p>
         </div>
       `;
       return;
     }
     
-    if (loadingIndicator) loadingIndicator.remove();
+    // Remover indicador de carga
+    if (loadingIndicator) {
+      loadingIndicator.remove();
+    }
     
+    // Renderizar cada artículo
     articlesData.forEach((article, index) => {
       const card = createArticleCard(article, index);
       container.appendChild(card);
     });
     
-    console.log(`✅ Renderizados ${articlesData.length} artículos`);
+    console.log(`✅ Renderizados ${articlesData.length} artículos en el DOM`);
   }
 
   function createArticleCard(article, index) {
     const card = document.createElement('div');
     card.className = 'paper-card flex fade-in';
     card.id = `card-${index}`;
-    card.style.animationDelay = `${Math.min(index * 0.05, 2)}s`;
+    card.style.animationDelay = `${Math.min(index * 0.05, 2)}s`; // Max 2s delay
     
+    // Calcular relevancia
     const percent = Math.round((article.similarity || 0) * 100);
     let relevanceClass = 'relevance-low';
     let relevanceIcon = '❌';
@@ -319,6 +352,7 @@
       relevanceIcon = '⚠️'; 
     }
     
+    // Sanitizar datos
     const title = escapeHtml(article.title || 'Sin título');
     const year = escapeHtml(String(article.year || 'N/D'));
     const authors = Array.isArray(article.authors) 
@@ -388,361 +422,18 @@
   let completedTasks = 0;
   let decisions = new Set();
 
+  // Inicializar cuando el DOM esté listo
   document.addEventListener('DOMContentLoaded', function() {
-    console.log("🚀 Inicializando con Puter.js...");
+    console.log("🚀 Inicializando aplicación...");
+    
     const success = loadArticles();
-    if (success) renderArticles();
+    if (success) {
+      renderArticles();
+    }
   });
 
   // ============================================================
-  // 📋 PROMPTS PARA PUTER.JS
-  // ============================================================
-  function getSystemPromptForColumn(column, researchQuestion) {
-    const base = `Eres un experto en revisiones sistemáticas de literatura científica.
-
-CONTEXTO: La revisión busca responder: "${researchQuestion}"
-
-REGLAS ESTRICTAS:
-1. SOLO reporta lo que está EXPLÍCITAMENTE en el texto
-2. Si no encuentras info, responde "No especificado"
-3. NO inventes, NO asumas
-4. Responde SOLO en JSON válido (sin \`\`\`json ni markdown)
-`;
-
-    const prompts = {
-      "study_design": base + `
-COLUMNA: Diseño del Estudio
-Clasifica el tipo de investigación.
-
-TIPOS: Experimental, Comparativo, Simulación, Caso de estudio, Revisión sistemática
-
-FORMATO JSON:
-{
-  "tipo": "Experimental / Comparativo / etc.",
-  "justificacion": "Explicación breve (máximo 150 caracteres)"
-}`,
-
-      "methodology": base + `
-COLUMNA: Metodología
-Extrae detalles técnicos.
-
-FORMATO JSON:
-{
-  "tipo_estudio": "Experimental / Simulación / etc.",
-  "algoritmos": ["Algoritmo1", "Algoritmo2"],
-  "frameworks": ["Framework1", "Framework2"],
-  "arquitectura": "Descripción breve",
-  "validacion": "Método de validación"
-}`,
-
-      "population": base + `
-COLUMNA: Población/Datasets
-Identifica fuentes de datos.
-
-FORMATO JSON:
-{
-  "datasets": ["Dataset1", "Dataset2"],
-  "tamano": "N muestras",
-  "tipo_datos": "Tipo",
-  "origen": "Real-world / Simulado"
-}`,
-
-      "objectives": base + `
-COLUMNA: Objetivos
-Lista objetivos con verbos de acción.
-
-FORMATO JSON:
-{
-  "objetivos": ["Evaluar...", "Comparar...", "Proponer..."]
-}`,
-
-      "key_findings": base + `
-COLUMNA: Hallazgos Clave
-Resultados principales CON NÚMEROS.
-
-FORMATO JSON:
-{
-  "hallazgos": [
-    {"resultado": "Descripción con números", "metrica": "Accuracy", "valor": "95.3%"}
-  ]
-}`,
-
-      "limitations": base + `
-COLUMNA: Limitaciones
-Restricciones explícitas.
-
-FORMATO JSON:
-{
-  "limitaciones": ["Limitación 1", "Limitación 2"]
-}`,
-
-      "summary": base + `
-COLUMNA: Resumen Ejecutivo
-Sintetiza en 2-3 oraciones.
-
-FORMATO JSON:
-{
-  "objetivo": "Objetivo principal",
-  "enfoque": "Método usado",
-  "contribucion": "Aporte del estudio"
-}`
-    };
-
-    return prompts[column] || base;
-  }
-
-  function getUserPromptForColumn(column, context, question) {
-    return `PREGUNTA: ${question}
-
-TEXTO DEL ARTÍCULO:
-${context.substring(0, 15000)}
-
----
-
-TAREA: Extrae información para "${column}" en JSON válido.
-IMPORTANTE: NO uses markdown, NO uses \`\`\`json, SOLO JSON puro.`;
-  }
-
-  // ============================================================
-  // 🎨 FORMATEO DE RESPUESTAS (CORREGIDO)
-  // ============================================================
-  function formatResponseForHTML(columnName, data) {
-    if (!data || data.error) {
-      return "<div class='text-gray-400 text-xs italic'>No especificado.</div>";
-    }
-
-    // ✅ STUDY_DESIGN - ARREGLADO
-    if (columnName === "study_design") {
-      const tipo = data.tipo || "No especificado";
-      const justif = data.justificacion || "";
-
-      return `
-        <div class='space-y-2'>
-          <div class='font-semibold text-indigo-600 text-base'>${tipo}</div>
-          <div class='text-slate-600 text-sm leading-relaxed' style='word-wrap: break-word; white-space: normal;'>
-            ${justif}
-          </div>
-        </div>
-      `;
-    }
-
-    // METHODOLOGY
-    if (columnName === "methodology") {
-      const tipo = data.tipo_estudio || "No especificado";
-      const algos = data.algoritmos || [];
-      const frameworks = data.frameworks || [];
-      
-      let html = `<div class='space-y-2 text-sm'>`;
-      html += `<div><span class='font-semibold'>Tipo:</span> ${tipo}</div>`;
-      
-      if (algos.length > 0 && algos[0] !== "No especificado") {
-        html += `<div><span class='font-semibold'>Algoritmos:</span> ${algos.join(', ')}</div>`;
-      }
-      
-      if (frameworks.length > 0 && frameworks[0] !== "No especificado") {
-        html += `<div><span class='font-semibold'>Frameworks:</span> ${frameworks.join(', ')}</div>`;
-      }
-      
-      html += `</div>`;
-      return html;
-    }
-
-    // POPULATION
-    if (columnName === "population") {
-      const datasets = data.datasets || [];
-      const tam = data.tamano || "";
-      
-      if (datasets.length === 0 || datasets[0] === "No especificado") {
-        return "<div class='text-gray-400 text-xs italic'>Datasets no especificados.</div>";
-      }
-      
-      let html = `<div class='space-y-1 text-sm'>`;
-      html += `<div><span class='font-semibold'>Datasets:</span> ${datasets.join(', ')}</div>`;
-      if (tam) html += `<div><span class='font-semibold'>Tamaño:</span> ${tam}</div>`;
-      html += `</div>`;
-      return html;
-    }
-
-    // KEY_FINDINGS
-    if (columnName === "key_findings") {
-      const hallazgos = data.hallazgos || [];
-      
-      if (hallazgos.length === 0) {
-        return "<div class='text-gray-400 text-xs italic'>Resultados no especificados.</div>";
-      }
-      
-      let html = "<div class='space-y-2 text-sm'>";
-      hallazgos.forEach(h => {
-        if (h.resultado) {
-          html += `<div>• ${h.resultado}</div>`;
-        }
-      });
-      html += "</div>";
-      return html;
-    }
-
-    // OBJECTIVES
-    if (columnName === "objectives") {
-      const objs = data.objetivos || [];
-      
-      if (objs.length === 0) {
-        return "<div class='text-gray-400 text-xs italic'>Objetivos no especificados.</div>";
-      }
-      
-      let html = "<ul class='text-sm space-y-1 list-disc list-inside'>";
-      objs.forEach(obj => {
-        html += `<li>${obj}</li>`;
-      });
-      html += "</ul>";
-      return html;
-    }
-
-    // LIMITATIONS
-    if (columnName === "limitations") {
-      const lims = data.limitaciones || [];
-      
-      if (lims.length === 0 || lims[0] === "No especificado") {
-        return "<div class='text-gray-400 text-xs italic'>No mencionadas.</div>";
-      }
-      
-      let html = "<ul class='text-sm space-y-1 list-disc list-inside'>";
-      lims.forEach(lim => {
-        if (lim !== "No especificado") html += `<li>${lim}</li>`;
-      });
-      html += "</ul>";
-      return html;
-    }
-
-    // SUMMARY
-    if (columnName === "summary") {
-      const obj = data.objetivo || "?";
-      const enf = data.enfoque || "?";
-      const con = data.contribucion || "?";
-      
-      if (obj === "?" || obj.includes("No especificado")) {
-        return "<div class='text-gray-400 text-xs italic'>Información insuficiente.</div>";
-      }
-      
-      return `
-        <div class='space-y-2 text-sm'>
-          <div><span class='font-semibold text-slate-600'>Objetivo:</span> ${obj}</div>
-          <div><span class='font-semibold text-slate-600'>Enfoque:</span> ${enf}</div>
-          <div><span class='font-semibold text-slate-600'>Contribución:</span> ${con}</div>
-        </div>
-      `;
-    }
-
-    // FALLBACK
-    return `<pre class='text-xs bg-slate-50 p-2 rounded overflow-auto' style='max-height: 200px; white-space: pre-wrap; word-wrap: break-word;'>${JSON.stringify(data, null, 2)}</pre>`;
-  }
-
-  // ============================================================
-  // ⚡ LLAMADA A PUTER.JS (SIN RATE LIMITS)
-  // ============================================================
-  async function fetchAIColumnWithPuter(task) {
-    const cell = document.getElementById(task.cellId);
-    if (!cell) return;
-    
-    cell.querySelector('div').innerHTML = `
-      <div class="flex items-center gap-2 text-indigo-600">
-        <i class="fas fa-circle-notch fa-spin"></i> Analizando con Puter.js...
-      </div>`;
-
-    try {
-      const article = articlesData[task.articleId];
-      const context = article.full_text || article.abstract || "";
-      const question = "{{ question }}";
-      
-      const systemPrompt = getSystemPromptForColumn(task.columnName, question);
-      const userPrompt = getUserPromptForColumn(task.columnName, context, question);
-      
-      // ✅ LLAMAR A PUTER.JS
-      const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-      
-      const response = await puter.ai.chat(fullPrompt, { 
-        model: "gpt-4o-mini",
-        temperature: 0.05
-      });
-
-      // Limpiar respuesta
-      let content = response.replace(/```json|```/g, "").trim();
-      
-      // Parsear JSON
-      const data = JSON.parse(content);
-
-      // Formatear para HTML
-      const formattedHTML = formatResponseForHTML(task.columnName, data);
-      
-      const contentDiv = cell.querySelector('div');
-      contentDiv.className = "text-slate-700 mt-2 text-sm leading-relaxed";
-      contentDiv.innerHTML = formattedHTML;
-
-      // Guardar en datos locales
-      if (!articlesData[task.articleId].ai_data) {
-        articlesData[task.articleId].ai_data = {};
-      }
-      articlesData[task.articleId].ai_data[task.columnName] = formattedHTML;
-
-      console.log(`✅ Columna '${task.columnName}' generada para artículo ${task.articleId}`);
-
-    } catch (e) {
-      console.error("❌ Error con Puter.js:", e);
-      cell.querySelector('div').innerHTML = `
-        <div class="text-amber-600 text-xs bg-amber-50 p-2 rounded border border-amber-200">
-          <i class="fas fa-exclamation-triangle"></i> Error: ${e.message}. Reintentando en 3s...
-        </div>`;
-      
-      // Reintentar después de 3 segundos
-      setTimeout(() => {
-        if (cell.querySelector('div').innerText.includes("Reintentando")) {
-          fetchAIColumnWithPuter(task);
-        }
-      }, 3000);
-    }
-  }
-
-  // ============================================================
-  // 🌐 TRADUCCIÓN CON PUTER.JS
-  // ============================================================
-  async function fetchTranslationWithPuter(task) {
-    const box = document.getElementById(`translation-box-${task.articleId}`);
-    if (!box) return;
-    
-    box.classList.remove('hidden');
-    box.innerHTML = `<div class="mt-3 p-3 bg-blue-50 rounded-lg text-blue-500 text-xs">
-      <i class="fas fa-spinner fa-spin"></i> Traduciendo con Puter.js...
-    </div>`;
-
-    try {
-      const abstract = articlesData[task.articleId].abstract || "";
-      
-      const prompt = `Eres un traductor académico especializado.
-
-Traduce este abstract científico al español manteniendo términos técnicos:
-
-${abstract.substring(0, 2000)}
-
-Responde SOLO con la traducción, sin explicaciones adicionales.`;
-
-      const translation = await puter.ai.chat(prompt, { 
-        model: "gpt-4o-mini",
-        temperature: 0.1
-      });
-
-      box.className = "mt-3 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500";
-      box.innerHTML = `<strong class="text-blue-700">[ES]</strong> <span class="text-slate-700">${escapeHtml(translation)}</span>`;
-      articlesData[task.articleId].translation = translation;
-
-      console.log(`✅ Traducción completada para artículo ${task.articleId}`);
-
-    } catch (e) { 
-      console.error("❌ Error traduciendo:", e);
-      box.innerHTML = `<span class="text-red-400 text-xs">Error de traducción: ${e.message}</span>`;
-    }
-  }
-
-  // ============================================================
-  // 📊 AGREGAR COLUMNA
+  // AGREGAR COLUMNA
   // ============================================================
   window.addColumn = function(colName) {
     if (activeColumns.includes(colName)) {
@@ -753,7 +444,7 @@ Responde SOLO con la traducción, sin explicaciones adicionales.`;
     activeColumns.push(colName);
 
     const btn = document.getElementById(`btn-${colName}`);
-    if (btn) {
+    if(btn) {
       btn.classList.add('active');
       btn.onclick = null;
       btn.innerHTML += ' <i class="fas fa-check ml-auto"></i>';
@@ -761,7 +452,7 @@ Responde SOLO con la traducción, sin explicaciones adicionales.`;
 
     articlesData.forEach((_, index) => {
       const container = document.getElementById(`ai-container-${index}`);
-      if (!container) return;
+      if(!container) return;
 
       container.classList.remove('hidden');
       
@@ -792,6 +483,7 @@ Responde SOLO con la traducción, sin explicaciones adicionales.`;
       'key_findings': { title: 'Hallazgos', icon: 'fas fa-lightbulb', color: 'text-yellow-500' },
       'limitations': { title: 'Limitaciones', icon: 'fas fa-exclamation-triangle', color: 'text-red-500' },
       'summary': { title: 'Resumen', icon: 'fas fa-align-left', color: 'text-blue-500' },
+      // Nuevas columnas
       'study_design': { title: 'Diseño', icon: 'fas fa-project-diagram', color: 'text-cyan-600' },
       'objectives': { title: 'Objetivos', icon: 'fas fa-bullseye', color: 'text-emerald-600' },
       'independent_variables': { title: 'Vars. Indep.', icon: 'fas fa-sliders-h', color: 'text-indigo-500' },
@@ -801,7 +493,7 @@ Responde SOLO con la traducción, sin explicaciones adicionales.`;
   }
 
   // ============================================================
-  // 🌐 TRADUCIR TODOS LOS ABSTRACTS
+  // TRADUCCIÓN
   // ============================================================
   window.translateAllAbstracts = function() {
     const btn = document.getElementById('btn-translate-all');
@@ -809,7 +501,7 @@ Responde SOLO con la traducción, sin explicaciones adicionales.`;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin text-blue-500 mr-2"></i> Procesando...';
     
     articlesData.forEach((art, idx) => {
-      if (art.abstract && art.abstract.length > 20) {
+      if(art.abstract && art.abstract.length > 20) {
         taskQueue.push({ type: 'translate', articleId: idx });
         totalTasks++;
       }
@@ -818,7 +510,7 @@ Responde SOLO con la traducción, sin explicaciones adicionales.`;
   };
 
   // ============================================================
-  // 🔄 PROCESADOR DE COLA
+  // PROCESADOR DE COLA
   // ============================================================
   async function processQueue() {
     if (isProcessing || taskQueue.length === 0) {
@@ -831,8 +523,8 @@ Responde SOLO con la traducción, sin explicaciones adicionales.`;
     updateQueueUI("active");
 
     try {
-      if (task.type === 'column') await fetchAIColumnWithPuter(task);
-      if (task.type === 'translate') await fetchTranslationWithPuter(task);
+      if (task.type === 'column') await fetchAIColumn(task);
+      if (task.type === 'translate') await fetchTranslation(task);
     } catch (e) {
       console.error("❌ Error en tarea:", e);
     }
@@ -841,7 +533,7 @@ Responde SOLO con la traducción, sin explicaciones adicionales.`;
     setTimeout(() => {
       isProcessing = false;
       processQueue();
-    }, 500); // Sin rate limit, más rápido
+    }, 800); // Reducido de 1500ms a 800ms
   }
 
   function updateQueueUI(state = "idle") {
@@ -864,7 +556,93 @@ Responde SOLO con la traducción, sin explicaciones adicionales.`;
   }
 
   // ============================================================
-  // 📌 DECISIONES (INCLUIR/EXCLUIR)
+  // LLAMADAS AJAX
+  // ============================================================
+  async function fetchAIColumn(task) {
+    const cell = document.getElementById(task.cellId);
+    if(!cell) return;
+    
+    // Indicador de carga
+    cell.querySelector('div').innerHTML = `<div class="flex items-center gap-2 text-indigo-600"><i class="fas fa-circle-notch fa-spin"></i> Analizando...</div>`;
+
+    try {
+      const response = await fetch('/generate_column', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          article: articlesData[task.articleId], 
+          column_name: task.columnName,
+          question: "{{ question }}"
+        })
+      });
+
+      if(response.ok) {
+        const data = await response.json();
+        const contentDiv = cell.querySelector('div');
+        
+        // ✅ CORRECCIÓN VISUAL:
+        // 1. Usamos una clase que permita saltos de línea y buen espaciado
+        contentDiv.className = "text-slate-700 mt-2 text-sm leading-relaxed prose prose-sm max-w-none";
+        
+        // 2. Inyectamos como HTML real. El backend ya envía <b> y <br>.
+        contentDiv.innerHTML = data.value; 
+        
+        // Guardar en datos locales
+        if(!articlesData[task.articleId].ai_data) articlesData[task.articleId].ai_data = {};
+        articlesData[task.articleId].ai_data[task.columnName] = data.value;
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch(e) {
+      console.error("❌ Error generando columna:", e);
+      // Mensaje de error amigable
+      cell.querySelector('div').innerHTML = `<div class="text-amber-600 text-xs bg-amber-50 p-2 rounded border border-amber-200 mt-1"><i class="fas fa-exclamation-triangle"></i> No se pudo analizar. Reintentando...</div>`;
+      
+      // Opcional: Reintentar automáticamente después de 3 segundos
+      setTimeout(() => {
+          // Solo reintentar si sigue mostrando error (para evitar bucles infinitos si es error fatal)
+          if(cell.querySelector('div').innerText.includes("No se pudo analizar")) {
+              fetchAIColumn(task); 
+          }
+      }, 3000);
+    }
+  }
+
+  async function fetchTranslation(task) {
+    const box = document.getElementById(`translation-box-${task.articleId}`);
+    if(!box) return;
+    
+    box.classList.remove('hidden');
+    box.innerHTML = `<div class="mt-3 p-3 bg-blue-50 rounded-lg text-blue-500 text-xs">
+      <i class="fas fa-spinner fa-spin"></i> Traduciendo...
+    </div>`;
+
+    try {
+      const response = await fetch('/translate_abstract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          article_id: task.articleId, 
+          abstract: articlesData[task.articleId].abstract 
+        })
+      });
+
+      if(response.ok) {
+        const data = await response.json();
+        box.className = "mt-3 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500";
+        box.innerHTML = `<strong class="text-blue-700">[ES]</strong> <span class="text-slate-700">${escapeHtml(data.translation)}</span>`;
+        articlesData[task.articleId].translation = data.translation;
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch(e) { 
+      console.error("❌ Error traduciendo:", e);
+      box.innerHTML = `<span class="text-red-400">Error de traducción</span>`;
+    }
+  }
+
+  // ============================================================
+  // DECISIONES
   // ============================================================
   window.setDecision = function(id, decision) {
     const card = document.getElementById(`card-${id}`);
@@ -883,11 +661,11 @@ Responde SOLO con la traducción, sin explicaciones adicionales.`;
   };
 
   // ============================================================
-  // ✅ FINALIZAR REVISIÓN
+  // FINALIZAR
   // ============================================================
   window.submitScreening = async function() {
     if (decisions.size === 0) {
-      if (!confirm("No has incluido ningún artículo. ¿Continuar de todas formas?")) return;
+      if(!confirm("No has incluido ningún artículo. ¿Continuar de todas formas?")) return;
     }
     
     const btn = document.querySelector('button[onclick="submitScreening()"]');
@@ -921,7 +699,7 @@ Responde SOLO con la traducción, sin explicaciones adicionales.`;
         body: JSON.stringify(payload)
       });
       
-      if (res.ok) {
+      if(res.ok) {
         const html = await res.text();
         document.open(); 
         document.write(html); 
@@ -929,7 +707,7 @@ Responde SOLO con la traducción, sin explicaciones adicionales.`;
       } else {
         throw new Error(`Error del servidor: ${res.status}`);
       }
-    } catch (e) {
+    } catch(e) {
       alert(`Error de conexión: ${e.message}`);
       btn.disabled = false;
       btn.innerHTML = '<i class="fas fa-arrow-right"></i> Finalizar Revisión';
