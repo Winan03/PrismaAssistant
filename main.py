@@ -289,6 +289,15 @@ async def apply_filters(request: Request, session_id: int = Form(...), question:
     
     data.update({"relevant_articles": relevant, "dedup_articles": unique, "log_prefix": log_prefix})
     
+    for art in relevant:
+        if 'abstract' in art and art['abstract']:
+            art['abstract'] = art['abstract'][:5000]  # límite razonable
+        if 'full_text' in art:
+            del art['full_text']  # NUNCA envíes full_text al frontend
+        # Elimina campos pesados que no usas en screening
+        art.pop('embedding', None)
+        art.pop('pdf_content', None)
+
     return templates.TemplateResponse("screening.html", {
         "request": request,
         "session_id": session_id,
