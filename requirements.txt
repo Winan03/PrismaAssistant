@@ -12,10 +12,10 @@ numpy==1.26.4
 torch==2.2.2+cpu
 torchvision==0.17.2+cpu
 
-# --- LLAMAINDEX (PINNED PARA EVITAR CONFLICTOS CON HTTPX) ---
+# --- LLAMAINDEX (FIXED VERSIONES REALES) ---
 llama-index-core==0.10.66
-llama-index-llms-ollama==0.2.5
-llama-index-embeddings-huggingface==0.2.5
+llama-index-llms-ollama==0.3.0           # ← FIX: Versión que SÍ existe
+llama-index-embeddings-huggingface==0.3.0  # ← FIX: Compatible
 
 # Dependencias Core
 sentence-transformers==3.0.1
