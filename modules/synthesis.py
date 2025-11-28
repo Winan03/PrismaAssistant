@@ -1,6 +1,7 @@
 """
 Síntesis Narrativa Avanzada - Dual Output (HTML Breve + PDF Completo)
 Genera síntesis estilo Elicit para web y reporte completo para descarga.
+MODIFICADO: Usa Groq (Llama 3.3 70B) en lugar de OpenRouter
 """
 import requests
 import config
@@ -147,7 +148,7 @@ ESTUDIOS:
 FORMATO: Usa Markdown simple. Máximo 300 palabras. Estilo académico pero accesible.
 """
 
-    return _call_openrouter(system_prompt, user_prompt, max_tokens=800)
+    return _call_groq(system_prompt, user_prompt, max_tokens=800)
 
 def generate_synthesis_full(articles, question):
     """
@@ -222,47 +223,59 @@ ESTRUCTURA REQUERIDA:
 {formatted_refs}
 """
 
-    return _call_openrouter(system_prompt, user_prompt, max_tokens=4000)
+    return _call_groq(system_prompt, user_prompt, max_tokens=4000)
 
-def _call_openrouter(system_prompt, user_prompt, max_tokens=2000):
-    """Función auxiliar para llamadas a OpenRouter."""
+def _call_groq(system_prompt, user_prompt, max_tokens=2000):
+    """
+    Función auxiliar para llamadas a Groq API (Compatible con OpenAI).
+    USA: Llama 3.3 70B Versatile
+    """
+    if not config.GROQ_API_KEY:
+        logging.error("❌ GROQ_API_KEY no configurada")
+        return "Error: Token de Groq no disponible."
+    
     headers = {
-        "Authorization": f"Bearer {config.OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://upao.edu.pe",
-        "X-Title": "PRISMA Assistant"
+        "Authorization": f"Bearer {config.GROQ_API_KEY}",
+        "Content-Type": "application/json"
     }
     
     payload = {
-        "model": config.OPENROUTER_MODEL,
+        "model": config.GROQ_MODEL,  # llama-3.3-70b-versatile
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
         "temperature": 0.3,
-        "max_tokens": max_tokens
+        "max_tokens": max_tokens,
+        "top_p": 1,
+        "stream": False
     }
 
     try:
         start_t = time.time()
         response = requests.post(
-            f"{config.OPENROUTER_BASE_URL}/chat/completions",
+            config.GROQ_ENDPOINT,
             headers=headers,
             json=payload,
-            timeout=180
+            timeout=60  # Groq es muy rápido, 60s es más que suficiente
         )
         
         if response.status_code == 200:
             content = response.json()['choices'][0]['message']['content']
-            logging.info(f"✅ Síntesis generada en {time.time() - start_t:.2f}s")
+            elapsed = time.time() - start_t
+            logging.info(f"✅ Síntesis generada con Groq en {elapsed:.2f}s")
             return content
         else:
-            logging.error(f"❌ Error API: {response.status_code}")
-            return f"Error al generar síntesis (código {response.status_code})"
+            error_detail = response.json().get('error', {}).get('message', 'Sin detalles')
+            logging.error(f"❌ Error Groq API: {response.status_code} - {error_detail}")
+            return f"Error al generar síntesis (código {response.status_code}): {error_detail}"
 
+    except requests.exceptions.Timeout:
+        logging.error("❌ Timeout en Groq API (>60s)")
+        return "Error: La generación tardó demasiado. Intenta con menos artículos."
     except Exception as e:
-        logging.error(f"❌ Excepción: {e}")
-        return "Error técnico al conectar con IA."
+        logging.error(f"❌ Excepción en Groq: {e}")
+        return f"Error técnico al conectar con Groq: {str(e)}"
 
 # Función de compatibilidad (mantiene la interfaz anterior)
 def generate_synthesis(articles, question):
