@@ -12,9 +12,9 @@ numpy==1.26.4
 torch==2.2.2+cpu
 torchvision==0.17.2+cpu
 
-# --- LLAMAINDEX (SOLO CORE Y EMBEDDINGS – SIN OLLAMA) ---
-llama-index-core==0.10.66
-llama-index-embeddings-huggingface==0.3.0  # Compatible con core 0.10.66
+# --- LLAMAINDEX (ACTUALIZADO PARA COMPATIBILIDAD) ---
+llama-index-core==0.11.0
+llama-index-embeddings-huggingface==0.3.0
 
 # Dependencias Core
 sentence-transformers==3.0.1
