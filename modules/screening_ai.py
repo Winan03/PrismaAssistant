@@ -3,6 +3,7 @@ import os
 import time
 import json
 import hashlib
+import requests
 from typing import Dict, List, Optional
 from openai import OpenAI, RateLimitError, APIError 
 
