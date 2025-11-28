@@ -3,9 +3,17 @@ import os
 import time
 import json
 import hashlib
-import requests
 from typing import Dict, List, Optional
-from openai import OpenAI, RateLimitError, APIError 
+
+# ============================================================
+# 📦 IMPORTACIÓN DE GOOGLE GENERATIVE AI SDK
+# ============================================================
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:
+    logging.error("❌ Falta la librería google-genai. Instálala con: pip install google-genai")
+    raise
 
 # Configuración del logging principal
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -16,33 +24,39 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logging.getLogger("pdfminer").setLevel(logging.ERROR)
 logging.getLogger("pdfplumber").setLevel(logging.ERROR)
 logging.getLogger("httpx").setLevel(logging.WARNING)
-# ============================================================
 
 # Cache para ahorrar llamadas
 CACHE_DIR = ".cache/ai_columns"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 # ============================================================
-# ⚡ CONFIGURACIÓN DEL MOTOR (GITHUB MODELS / OPENROUTER)
+# ⚡ CONFIGURACIÓN DEL MOTOR GEMINI
 # ============================================================
-API_KEY = os.getenv("OPENROUTER_API_KEY") or os.getenv("GITHUB_TOKEN") 
-BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://models.github.ai/inference")
-MODEL_NAME = os.getenv("OPENROUTER_MODEL", "gpt-4o-mini") 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
-if not API_KEY:
-    logging.warning("⚠️ No se encontró API KEY. Asegúrate de configurar OPENROUTER_API_KEY o GITHUB_TOKEN en tu .env")
+if not GEMINI_API_KEY:
+    logging.warning("⚠️ No se encontró GEMINI_API_KEY. Configúralo en tu .env")
+    raise ValueError("GEMINI_API_KEY es requerido")
 
-client = OpenAI(
-    base_url=BASE_URL,
-    api_key=API_KEY or "dummy-key",
-)
+# Inicializar el cliente Gemini
+client = genai.Client(api_key=GEMINI_API_KEY)
+
+# Modelos disponibles (Noviembre 2025)
+# NIVEL GRATUITO:
+# - gemini-2.0-flash: 15 RPM, 1M TPM, 200 RPD ✅ RECOMENDADO
+# - gemini-2.5-flash: 10 RPM, 250K TPM, 250 RPD
+# - gemini-2.5-flash-lite: 15 RPM, 250K TPM, 1000 RPD (más rápido pero menos potente)
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+
+logging.info(f"🚀 Usando modelo Gemini: {MODEL_NAME}")
+logging.info(f"📊 Límites estimados: ~15 RPM, ~1M TPM (verificar en AI Studio)")
 
 # ============================================================
 # 🛠️ UTILIDADES DE CACHE
 # ============================================================
 def get_cache_key(title: str, column: str, question: str = "") -> str:
     """Cache key incluye la pregunta para contexto específico"""
-    key = f"{title}_{column}_{question[:50]}_v50_elicit_style".encode('utf-8')
+    key = f"{title}_{column}_{question[:50]}_v50_gemini".encode('utf-8')
     return hashlib.md5(key).hexdigest()
 
 def load_from_cache(title: str, column: str, question: str = "") -> str:
@@ -70,7 +84,7 @@ def save_to_cache(title: str, column: str, value: str, question: str = ""):
 def prepare_context(abstract: str, full_text: str) -> str:
     """Prioriza texto completo, fallback a abstract"""
     if full_text and len(full_text) > 1000:
-        return full_text[:20000]  # Aumentado para mejor extracción
+        return full_text[:20000]
     return abstract
 
 # ============================================================
@@ -94,6 +108,7 @@ REGLAS ESTRICTAS:
 3. NO inventes, NO asumas, NO generalices
 4. Usa terminología técnica precisa (nombres de algoritmos, métricas exactas, valores numéricos)
 5. Escribe en estilo académico denso (como Elicit)
+6. Responde SOLO con JSON válido, sin markdown ni explicaciones adicionales
 """
 
     column_specific = {
@@ -305,24 +320,32 @@ TEXTO DEL ARTÍCULO:
 TAREA: Extrae la información para la columna "{column}" siguiendo las instrucciones del sistema.
 
 RECUERDA:
-- Responde SOLO con JSON válido
+- Responde SOLO con JSON válido (sin markdown)
 - Si no encuentras la info, usa "No especificado"
 - Incluye VALORES NUMÉRICOS cuando estén disponibles
 """
 
 # ============================================================
-# ⚡ LLAMADA A LA API (ROBUSTA CON REINTENTOS)
+# ⚡ LLAMADA A LA API GEMINI (CON CONTROL DE RATE LIMITS)
 # ============================================================
 LAST_CALL_TIMESTAMP = 0
-REQUEST_INTERVAL = 2.5  # Reducido para mayor velocidad
+REQUEST_INTERVAL = 4.5  # Gemini free tier: ~15 RPM = 1 req cada 4 segundos
 
-def call_ai_api(messages: List[Dict], max_tokens: int = 600) -> Dict:
-    """Llama a Puter.js API (gratuita e ilimitada)"""
+def call_gemini_api(system_prompt: str, user_prompt: str, max_tokens: int = 700) -> Dict:
+    """
+    Llama a Gemini API con manejo robusto de rate limits.
+    
+    Límites Gemini 2.0 Flash (Free Tier):
+    - 15 RPM (requests per minute)
+    - 1M TPM (tokens per minute)
+    - 200 RPD (requests per day)
+    """
     global LAST_CALL_TIMESTAMP
     
+    # Control de rate limiting (client-side)
     elapsed = time.time() - LAST_CALL_TIMESTAMP
-    if elapsed < 1.0:  # Reducido a 1 segundo
-        time.sleep(1.0 - elapsed)
+    if elapsed < REQUEST_INTERVAL:
+        time.sleep(REQUEST_INTERVAL - elapsed)
     
     max_retries = 3
     
@@ -330,49 +353,66 @@ def call_ai_api(messages: List[Dict], max_tokens: int = 600) -> Dict:
         try:
             LAST_CALL_TIMESTAMP = time.time()
             
-            # Construir prompt combinado (Puter espera texto plano)
-            system_msg = next((m['content'] for m in messages if m['role'] == 'system'), '')
-            user_msg = next((m['content'] for m in messages if m['role'] == 'user'), '')
-            combined_prompt = f"{system_msg}\n\n{user_msg}\n\nResponde SOLO con JSON válido."
+            # Prompt combinado (Gemini funciona mejor con prompt único)
+            combined_prompt = f"{system_prompt}\n\n{user_prompt}"
             
-            # Llamada a Puter.js API
-            response = requests.post(
-                "https://api.puter.com/ai/chat",  # Endpoint correcto (verifica docs)
-                json={
-                    "prompt": combined_prompt,
-                    "model": "gpt-4o-mini",  # o "gpt-5-nano" según tus necesidades
-                    "temperature": 0.05,
-                    "max_tokens": max_tokens
-                },
-                timeout=30
+            # Llamada a Gemini con configuración optimizada
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=combined_prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.05,  # Baja temperatura para extracción precisa
+                    max_output_tokens=max_tokens,
+                    response_mime_type="application/json"  # Forzar respuesta JSON
+                )
             )
             
-            if response.status_code == 200:
-                data = response.json()
-                # Puter devuelve la respuesta en data['response'] o data['text']
-                content = data.get('response') or data.get('text') or data.get('content', '')
-                
-                # Limpiar markdown si viene con ```json
-                content = content.replace('```json', '').replace('```', '').strip()
-                
-                return json.loads(content)
-            else:
-                logging.warning(f"⚠️ Puter API error {response.status_code}: {response.text}")
+            # Extraer texto de la respuesta
+            content = response.text
+            
+            if not content:
+                logging.warning("⚠️ Respuesta vacía de Gemini")
                 time.sleep(2)
                 continue
-                
-        except requests.Timeout:
-            logging.warning(f"⏳ Timeout en intento {attempt + 1}")
-            time.sleep(3)
             
-        except json.JSONDecodeError as e:
-            logging.error(f"❌ Respuesta no JSON: {content[:200]}")
-            return None
+            # Limpiar markdown si viene con ```json
+            content = content.replace('```json', '').replace('```', '').strip()
             
-        except Exception as e:
-            logging.error(f"❌ Error Puter API: {e}")
-            if attempt == max_retries - 1:
+            # Parsear JSON
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError as e:
+                logging.error(f"❌ Respuesta no JSON: {content[:200]}")
+                # Intentar extraer JSON embebido
+                import re
+                json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                if json_match:
+                    return json.loads(json_match.group())
                 return None
+                
+        except Exception as e:
+            error_msg = str(e).lower()
+            
+            # Manejo de errores específicos de Gemini
+            if "429" in error_msg or "quota" in error_msg or "rate" in error_msg:
+                wait_time = 30 * (attempt + 1)  # Backoff exponencial
+                logging.warning(f"⏳ Rate limit excedido. Esperando {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+            
+            elif "401" in error_msg or "unauthorized" in error_msg:
+                logging.error("❌ API Key inválida. Verifica GEMINI_API_KEY")
+                return None
+            
+            elif "403" in error_msg or "forbidden" in error_msg:
+                logging.error("❌ Acceso denegado. Verifica permisos del proyecto")
+                return None
+            
+            else:
+                logging.error(f"❌ Error Gemini API (intento {attempt + 1}): {e}")
+                if attempt == max_retries - 1:
+                    return None
+                time.sleep(5)
                 
     return None
 
@@ -450,7 +490,7 @@ def format_response_for_html(column: str, data: Dict) -> str:
         html += "</div>"
         return html
     
-    # ✅ STUDY DESIGN (NUEVO - ARREGLADO)
+    # STUDY DESIGN
     if column == "study_design":
         tipo = data.get("tipo", "No especificado")
         justif = data.get("justificacion", "")
@@ -459,13 +499,12 @@ def format_response_for_html(column: str, data: Dict) -> str:
         html += f"<div><span class='font-semibold text-indigo-600'>Tipo:</span> <span class='font-medium'>{tipo}</span></div>"
         
         if justif and "No especificado" not in justif:
-            # ✅ CLAVE: Agregamos word-wrap inline para justificación larga
             html += f"<div class='text-slate-600 italic text-xs leading-relaxed' style='word-wrap: break-word; overflow-wrap: break-word;'>\"{justif}\"</div>"
         
         html += "</div>"
         return html
     
-    # ✅ OBJECTIVES (NUEVO)
+    # OBJECTIVES
     if column == "objectives":
         objetivos = data.get("objetivos", [])
         
@@ -540,7 +579,7 @@ def format_response_for_html(column: str, data: Dict) -> str:
         html += "</ul>"
         return html
     
-    # FALLBACK GENÉRICO (con word-wrap)
+    # FALLBACK GENÉRICO
     return f"<pre class='text-xs text-slate-600' style='white-space: pre-wrap; word-wrap: break-word;'>{json.dumps(data, indent=2, ensure_ascii=False)}</pre>"
 
 
@@ -549,7 +588,7 @@ def format_response_for_html(column: str, data: Dict) -> str:
 # ============================================================
 
 def _generate_columns_for_article(article: Dict, columns: List[str], research_question: str = "") -> Dict:
-    """Genera columnas con contexto de la pregunta de investigación"""
+    """Genera columnas con contexto de la pregunta de investigación usando Gemini"""
     
     title = article.get('title', '')
     context = prepare_context(article.get('abstract', ''), article.get('full_text', ''))
@@ -567,12 +606,10 @@ def _generate_columns_for_article(article: Dict, columns: List[str], research_qu
             
         logging.info(f"⚡ Extrayendo '{col}': {title[:40]}...")
         
-        messages = [
-            {"role": "system", "content": get_system_prompt_for_column(col, research_question)},
-            {"role": "user", "content": get_user_prompt_for_column(col, context, research_question)}
-        ]
+        system_prompt = get_system_prompt_for_column(col, research_question)
+        user_prompt = get_user_prompt_for_column(col, context, research_question)
         
-        data = call_ai_api(messages, max_tokens=700)
+        data = call_gemini_api(system_prompt, user_prompt, max_tokens=700)
         
         if not data:
             val = "<span class='text-red-400 text-xs'>Error de conexión</span>"
@@ -586,34 +623,36 @@ def _generate_columns_for_article(article: Dict, columns: List[str], research_qu
 
 
 # ============================================================
-# 🌐 TRADUCCIÓN (SIN CAMBIOS)
+# 🌐 TRADUCCIÓN (USANDO GEMINI)
 # ============================================================
 
 def translate_abstract_to_spanish(text: str) -> str:
-    messages = [
-        {"role": "system", "content": "Eres un traductor académico especializado."},
-        {"role": "user", "content": f"Traduce este abstract al español manteniendo términos técnicos:\n\n{text[:2000]}"}
-    ]
-    
+    """Traduce abstract usando Gemini"""
     try:
-        response = client.chat.completions.create(
+        response = client.models.generate_content(
             model=MODEL_NAME,
-            messages=messages,
-            temperature=0.1,
-            max_tokens=500
+            contents=f"Traduce este abstract científico al español manteniendo términos técnicos:\n\n{text[:2000]}",
+            config=types.GenerateContentConfig(
+                temperature=0.1,
+                max_output_tokens=500
+            )
         )
-        return response.choices[0].message.content
+        return response.text
     except:
         return text
 
 
 def translate_question_to_english(text: str) -> str:
+    """Traduce pregunta de investigación a inglés"""
     try:
-        response = client.chat.completions.create(
+        response = client.models.generate_content(
             model=MODEL_NAME,
-            messages=[{"role": "user", "content": f"Translate to English (preserve technical terms):\n{text}"}],
-            temperature=0.1
+            contents=f"Translate this research question to English (preserve technical terms):\n{text}",
+            config=types.GenerateContentConfig(
+                temperature=0.1,
+                max_output_tokens=200
+            )
         )
-        return response.choices[0].message.content
+        return response.text
     except:
         return text

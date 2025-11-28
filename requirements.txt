@@ -50,3 +50,5 @@ environs==9.5.0
 matplotlib>=3.8
 fpdf2>=2.7.9
 pillow>=10.0
+
+google-genai>=1.52.0

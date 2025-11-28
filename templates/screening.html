@@ -6,7 +6,7 @@
   <title>Cribado Manual - PRISMA Assistant</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Inter', sans-serif; }
     
@@ -51,20 +51,15 @@
       border-top: 1px solid #e2e8f0;
     }
     
-    /* ✅ ARREGLADO: Permite saltos de línea y scroll si es muy largo */
     .ai-cell {
       background: #f8fafc;
       padding: 16px;
       font-size: 0.9rem;
       line-height: 1.6;
       color: #334155;
-      
-      /* ✅ CRÍTICO: Evita cortes de texto */
       word-wrap: break-word;
       overflow-wrap: break-word;
       white-space: normal;
-      
-      /* ✅ Scroll si el contenido es muy largo (más de 400px) */
       max-height: 400px;
       overflow-y: auto;
     }
@@ -116,14 +111,12 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     .fade-in { animation: fadeIn 0.4s ease-out; }
     
-    /* NUEVO: Indicador de carga */
     .loading-indicator {
       text-align: center;
       padding: 40px;
       color: #64748b;
     }
     
-    /* ✅ BONUS: Estilo para scrollbar personalizada en .ai-cell */
     .ai-cell::-webkit-scrollbar {
       width: 6px;
     }
@@ -138,39 +131,82 @@
     .ai-cell::-webkit-scrollbar-thumb:hover {
       background: #94a3b8;
     }
-</style>
+  </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-indigo-50">
   <div class="app-layout">
     <div class="gradient-hero px-8 py-5 flex justify-between items-center text-white shadow-xl">
       <div class="flex items-center gap-4">
-        <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm"></div>
+        <div class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+          <i class="fas fa-clipboard-check text-2xl"></i>
+        </div>
         <div>
           <h1 class="text-2xl font-bold leading-none">Cribado Manual de Artículos</h1>
-          <p class="text-sm text-emerald-100 mt-1"><span id="total-articles-count">{{ articles|length }}</span> artículos candidatos (&gt;= 80% relevancia)</p>
+          <p class="text-sm text-emerald-100 mt-1">
+            <span id="total-articles-count">0</span> artículos candidatos (&gt;= 70% relevancia)
+          </p>
         </div>
       </div>
       <div class="flex items-center gap-4">
         <div class="bg-black/20 px-5 py-3 rounded-xl text-sm font-medium backdrop-blur-sm border border-white/10">
-          <span class="text-emerald-300 font-bold text-2xl" id="count-included">0</span> <span class="text-white/70 ml-2">Incluidos</span>
-        </div><button onclick="submitScreening()" class="bg-white text-emerald-800 px-8 py-3 rounded-xl text-sm font-bold hover:bg-emerald-50 transition shadow-xl flex items-center gap-2">Finalizar Revisión</button>
+          <span class="text-emerald-300 font-bold text-2xl" id="count-included">0</span> 
+          <span class="text-white/70 ml-2">Incluidos</span>
+        </div>
+        <button onclick="submitScreening()" class="bg-white text-emerald-800 px-8 py-3 rounded-xl text-sm font-bold hover:bg-emerald-50 transition shadow-xl flex items-center gap-2">
+          <i class="fas fa-arrow-right"></i> Finalizar Revisión
+        </button>
       </div>
     </div>
+    
     <div class="main-content">
       <div class="table-area">
         <div class="max-w-6xl mx-auto" id="articles-list">
           <div class="loading-indicator" id="loading-indicator">
+            <i class="fas fa-spinner fa-spin text-4xl text-indigo-500 mb-4"></i>
             <p class="text-lg font-semibold">Cargando artículos...</p>
           </div>
         </div>
       </div>
+      
       <div class="sidebar">
         <div class="mb-8">
-          <h3 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-4">Herramientas Globales</h3><button onclick="translateAllAbstracts()" id="btn-translate-all" class="col-btn">Traducir Todos los Abstracts</button>
+          <h3 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-4">Herramientas Globales</h3>
+          <button onclick="translateAllAbstracts()" id="btn-translate-all" class="col-btn">
+            <i class="fas fa-language"></i> Traducir Todos los Abstracts
+          </button>
         </div>
+        
         <div class="mb-8">
-          <h3 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-4">Agregar Columnas IA</h3><button onclick="addColumn('summary')" id="btn-summary" class="col-btn">Resumen (Español)</button> <button onclick="addColumn('methodology')" id="btn-methodology" class="col-btn">Metodología</button> <button onclick="addColumn('population')" id="btn-population" class="col-btn">Población / Datasets</button> <button onclick="addColumn('study_design')" id="btn-study_design" class="col-btn">Diseño del Estudio</button> <button onclick="addColumn('objectives')" id="btn-objectives" class="col-btn">Objetivos</button> <button onclick="addColumn('independent_variables')" id="btn-independent_variables" class="col-btn">Variables Indep.</button> <button onclick="addColumn('dependent_variables')" id="btn-dependent_variables" class="col-btn">Variables Dep.</button> <button onclick="addColumn('key_findings')" id="btn-key_findings" class="col-btn">Hallazgos Clave</button> <button onclick="addColumn('limitations')" id="btn-limitations" class="col-btn">Limitaciones</button>
+          <h3 class="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-4">Agregar Columnas IA</h3>
+          <button onclick="addColumn('summary')" id="btn-summary" class="col-btn">
+            <i class="fas fa-align-left"></i> Resumen (Español)
+          </button>
+          <button onclick="addColumn('methodology')" id="btn-methodology" class="col-btn">
+            <i class="fas fa-microscope"></i> Metodología
+          </button>
+          <button onclick="addColumn('population')" id="btn-population" class="col-btn">
+            <i class="fas fa-users"></i> Población / Datasets
+          </button>
+          <button onclick="addColumn('study_design')" id="btn-study_design" class="col-btn">
+            <i class="fas fa-project-diagram"></i> Diseño del Estudio
+          </button>
+          <button onclick="addColumn('objectives')" id="btn-objectives" class="col-btn">
+            <i class="fas fa-bullseye"></i> Objetivos
+          </button>
+          <button onclick="addColumn('independent_variables')" id="btn-independent_variables" class="col-btn">
+            <i class="fas fa-sliders-h"></i> Variables Indep.
+          </button>
+          <button onclick="addColumn('dependent_variables')" id="btn-dependent_variables" class="col-btn">
+            <i class="fas fa-chart-line"></i> Variables Dep.
+          </button>
+          <button onclick="addColumn('key_findings')" id="btn-key_findings" class="col-btn">
+            <i class="fas fa-lightbulb"></i> Hallazgos Clave
+          </button>
+          <button onclick="addColumn('limitations')" id="btn-limitations" class="col-btn">
+            <i class="fas fa-exclamation-triangle"></i> Limitaciones
+          </button>
         </div>
+        
         <div class="mt-auto bg-slate-50 p-4 rounded-xl border border-slate-100">
           <div class="flex items-center justify-between mb-2">
             <span class="text-xs font-bold text-slate-600">Agente IA</span>
@@ -184,940 +220,539 @@
       </div>
     </div>
   </div>
+
+  <!-- ============================================================ -->
+  <!-- 📦 DATOS JSON DEL SERVIDOR (INYECTADOS POR JINJA2) -->
+  <!-- ============================================================ -->
+  <script id="articles-data" type="application/json">
+{{ articles | tojson | safe }}
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🚀 CÓDIGO JAVASCRIPT PRINCIPAL -->
+  <!-- ============================================================ -->
   <script>
+  (function() {
+    'use strict';
 
-  // ============================================================
+    // ============================================================
+    // 🔥 VARIABLES GLOBALES
+    // ============================================================
+    let articlesData = [];
+    let activeColumns = [];
+    let taskQueue = [];
+    let isProcessing = false;
+    let totalTasks = 0;
+    let completedTasks = 0;
+    let decisions = new Set();
+    
+    // Variables de sesión (inyectadas por Jinja2)
+    const SESSION_ID = "{{ session_id }}";
+    const RESEARCH_QUESTION = "{{ question }}";
 
-  // 🔥 CARGA DE DATOS CON VALIDACIÓN ROBUSTA
+    // ============================================================
+    // 🛡️ FUNCIÓN DE SEGURIDAD: Escapar HTML
+    // ============================================================
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
 
-  // ============================================================
+    // ============================================================
+    // 📥 CARGA DE DATOS CON VALIDACIÓN ROBUSTA
+    // ============================================================
+    function loadArticles() {
+      try {
+        // Leer datos JSON del elemento script
+        const dataElement = document.getElementById('articles-data');
+        if (!dataElement) {
+          throw new Error("Elemento de datos no encontrado en el DOM");
+        }
 
-  let articlesData = [];
+        const rawData = JSON.parse(dataElement.textContent.trim());
+        
+        if (!rawData || !Array.isArray(rawData)) {
+          throw new Error("Datos no válidos desde el servidor");
+        }
 
-  // Función para escapar HTML y prevenir XSS
+        // Filtrar artículos válidos
+        articlesData = rawData.filter(art => {
+          if (!art || typeof art !== 'object') return false;
+          if (!art.title || art.title.length < 5) return false;
+          return true;
+        });
 
-  function escapeHtml(text) {
+        console.log(`✅ Artículos cargados: ${articlesData.length} válidos de ${rawData.length} totales`);
 
-    const div = document.createElement('div');
+        if (articlesData.length === 0) {
+          throw new Error("No hay artículos válidos para mostrar");
+        }
 
-    div.textContent = text;
-
-    return div.innerHTML;
-
-  }
-
-  // Intentar cargar artículos con múltiples estrategias
-
-  function loadArticles() {
-
-    try {
-
-      // Estrategia 1: JSON directo desde Jinja2
-
-      if (!rawData || !Array.isArray(rawData)) {
-
-        throw new Error("Datos no válidos desde el servidor");
-
-      }
-
-      articlesData = rawData;
-
-      console.log("✅ Artículos cargados correctamente:", articlesData.length);
-
-      // Validar que cada artículo tenga las propiedades mínimas
-
-      articlesData = articlesData.filter(art => {
-
-        if (!art || typeof art !== 'object') return false;
-
-        if (!art.title || art.title.length < 5) return false;
+        // Actualizar contador en header
+        document.getElementById('total-articles-count').textContent = articlesData.length;
 
         return true;
 
-      });
+      } catch (e) {
+        console.error("❌ Error crítico cargando datos:", e);
+        showError(e.message);
+        return false;
+      }
+    }
 
-      console.log("✅ Artículos válidos después de filtrado:", articlesData.length);
+    // ============================================================
+    // ⚠️ MOSTRAR ERROR EN LA UI
+    // ============================================================
+    function showError(message) {
+      const container = document.getElementById('articles-list');
+      container.innerHTML = `
+        <div class="bg-red-50 border-2 border-red-200 rounded-xl p-8 text-center max-w-2xl mx-auto">
+          <i class="fas fa-exclamation-circle text-red-500 text-5xl mb-4"></i>
+          <h2 class="text-xl font-bold text-red-700 mb-2">Error al Cargar Artículos</h2>
+          <p class="text-red-600 mb-4">${escapeHtml(message)}</p>
+          <button onclick="location.reload()" class="bg-red-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-600 transition">
+            <i class="fas fa-redo mr-2"></i> Recargar Página
+          </button>
+        </div>
+      `;
+    }
 
-      if (articlesData.length === 0) {
+    // ============================================================
+    // 🎨 RENDERIZADO DE ARTÍCULOS
+    // ============================================================
+    function renderArticles() {
+      const container = document.getElementById('articles-list');
+      const loadingIndicator = document.getElementById('loading-indicator');
 
-        throw new Error("No hay artículos válidos para mostrar");
-
+      if (!articlesData || articlesData.length === 0) {
+        container.innerHTML = `
+          <div class="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-8 text-center max-w-2xl mx-auto">
+            <i class="fas fa-inbox text-yellow-500 text-5xl mb-4"></i>
+            <h2 class="text-xl font-bold text-yellow-700">No hay artículos para revisar</h2>
+            <p class="text-yellow-600 mt-2">Intenta ajustar los filtros de búsqueda</p>
+          </div>
+        `;
+        return;
       }
 
-      return true;
+      // Remover indicador de carga
+      if (loadingIndicator) {
+        loadingIndicator.remove();
+      }
 
-    } catch (e) {
+      // Renderizar cada artículo
+      articlesData.forEach((article, index) => {
+        const card = createArticleCard(article, index);
+        container.appendChild(card);
+      });
 
-      console.error("❌ Error crítico cargando datos:", e);
+      console.log(`✅ Renderizados ${articlesData.length} artículos en el DOM`);
+    }
 
+    // ============================================================
+    // 🃏 CREAR TARJETA DE ARTÍCULO
+    // ============================================================
+    function createArticleCard(article, index) {
+      const card = document.createElement('div');
+      card.className = 'paper-card flex fade-in';
+      card.id = `card-${index}`;
+      card.style.animationDelay = `${Math.min(index * 0.05, 2)}s`;
+
+      // Calcular relevancia
+      const percent = Math.round((article.similarity || 0) * 100);
+      let relevanceClass = 'relevance-low';
+      let relevanceIcon = '❌';
+      if (percent >= 85) {
+        relevanceClass = 'relevance-high';
+        relevanceIcon = '✅';
+      } else if (percent >= 70) {
+        relevanceClass = 'relevance-medium';
+        relevanceIcon = '⚠️';
+      }
+
+      // Sanitizar datos
+      const title = escapeHtml(article.title || 'Sin título');
+      const year = escapeHtml(String(article.year || 'N/D'));
+      const authors = Array.isArray(article.authors)
+        ? article.authors.slice(0, 2).map(a => escapeHtml(a)).join(', ')
+        : escapeHtml(String(article.authors || 'Autores no disponibles'));
+      const journal = article.journal ? escapeHtml(article.journal) : '';
+      const abstract = escapeHtml(article.abstract || 'Abstract no disponible');
       
-
-      // Mostrar error en la UI
-
-      const container = document.getElementById('articles-list');
-
-      container.innerHTML = `
-
-        <div class="bg-red-50 border-2 border-red-200 rounded-xl p-8 text-center">
-
-          <i class="fas fa-exclamation-circle text-red-500 text-5xl mb-4"></i>
-
-          <h2 class="text-xl font-bold text-red-700 mb-2">Error al Cargar Artículos</h2>
-
-          <p class="text-red-600 mb-4">${escapeHtml(e.message)}</p>
-
-          <button onclick="location.reload()" class="bg-red-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-600">
-
-            <i class="fas fa-redo mr-2"></i> Recargar Página
-
-          </button>
-
-        </div>
-
-      `;
-
-      
-
-      return false;
-
-    }
-
-  }
-
-
-
-  // ============================================================
-
-  // 🎨 RENDERIZADO DE ARTÍCULOS
-
-  // ============================================================
-
-  function renderArticles() {
-
-    const container = document.getElementById('articles-list');
-
-    const loadingIndicator = document.getElementById('loading-indicator');
-
-    
-
-    if (!articlesData || articlesData.length === 0) {
-
-      container.innerHTML = `
-
-        <div class="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-8 text-center">
-
-          <i class="fas fa-inbox text-yellow-500 text-5xl mb-4"></i>
-
-          <h2 class="text-xl font-bold text-yellow-700">No hay artículos para revisar</h2>
-
-          <p class="text-yellow-600 mt-2">Intenta ajustar los filtros de búsqueda</p>
-
-        </div>
-
-      `;
-
-      return;
-
-    }
-
-    
-
-    // Remover indicador de carga
-
-    if (loadingIndicator) {
-
-      loadingIndicator.remove();
-
-    }
-
-    
-
-    // Renderizar cada artículo
-
-    articlesData.forEach((article, index) => {
-
-      const card = createArticleCard(article, index);
-
-      container.appendChild(card);
-
-    });
-
-    
-
-    console.log(`✅ Renderizados ${articlesData.length} artículos en el DOM`);
-
-  }
-
-
-
-  function createArticleCard(article, index) {
-
-    const card = document.createElement('div');
-
-    card.className = 'paper-card flex fade-in';
-
-    card.id = `card-${index}`;
-
-    card.style.animationDelay = `${Math.min(index * 0.05, 2)}s`; // Max 2s delay
-
-    
-
-    // Calcular relevancia
-
-    const percent = Math.round((article.similarity || 0) * 100);
-
-    let relevanceClass = 'relevance-low';
-
-    let relevanceIcon = '❌';
-
-    if (percent >= 85) { 
-
-      relevanceClass = 'relevance-high'; 
-
-      relevanceIcon = '✅'; 
-
-    } else if (percent >= 70) { 
-
-      relevanceClass = 'relevance-medium'; 
-
-      relevanceIcon = '⚠️'; 
-
-    }
-
-    
-
-    // Sanitizar datos
-
-    const title = escapeHtml(article.title || 'Sin título');
-
-    const year = escapeHtml(String(article.year || 'N/D'));
-
-    const authors = Array.isArray(article.authors) 
-
-      ? article.authors.slice(0, 2).map(a => escapeHtml(a)).join(', ')
-
-      : 'Autores no disponibles';
-
-    const journal = article.journal ? escapeHtml(article.journal) : '';
-
-    const abstract = escapeHtml(article.abstract || 'Abstract no disponible');
-
-    
-
-    card.innerHTML = `
-
-      <div class="status-bar"></div>
-
-      <div class="w-full">
-
-        <div class="p-6">
-
-          <div class="flex justify-between items-start gap-6">
-
-            <div class="flex-1">
-
-              <h3 class="text-xl font-bold text-slate-800 mb-3 leading-tight hover:text-indigo-600 transition cursor-pointer">
-
-                ${title}
-
-              </h3>
-
-              <div class="flex flex-wrap gap-3 text-sm text-slate-500 mb-4">
-
-                <span class="bg-slate-100 px-3 py-1 rounded-lg font-semibold text-slate-700">
-
-                  <i class="fas fa-calendar mr-1"></i> ${year}
-
-                </span>
-
-                <span><i class="fas fa-users mr-1"></i> ${authors}</span>
-
-                ${journal ? `<span class="italic text-xs">${journal}</span>` : ''}
-
-                <span class="relevance-badge ${relevanceClass}">
-
-                  ${relevanceIcon} ${percent}% Relevancia
-
-                </span>
-
-              </div>
-
-
-
-              <details class="group">
-
-                <summary class="text-sm text-indigo-600 cursor-pointer hover:underline font-semibold list-none flex items-center gap-2 w-fit select-none">
-
-                  <i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i>
-
-                  Ver Abstract Original
-
-                </summary>
-
-                <div class="mt-3 text-slate-600 leading-relaxed text-sm pl-4 border-l-4 border-slate-200">
-
-                  ${abstract}
-
-                  <div id="translation-box-${index}" class="hidden"></div>
-
+      // URL del artículo (si existe)
+      const url = article.url || article.pdf_url || article.link || '';
+      const urlButton = url ? `
+        <a href="${escapeHtml(url)}" target="_blank" 
+           class="px-4 py-2 rounded-lg border border-indigo-200 text-indigo-700 text-xs font-semibold hover:bg-indigo-50 transition flex items-center gap-2">
+          <i class="fas fa-external-link-alt"></i> Ver en Fuente
+        </a>
+      ` : '';
+
+      card.innerHTML = `
+        <div class="status-bar"></div>
+        <div class="w-full">
+          <div class="p-6">
+            <div class="flex justify-between items-start gap-6">
+              <div class="flex-1">
+                <h3 class="text-xl font-bold text-slate-800 mb-3 leading-tight hover:text-indigo-600 transition cursor-pointer">
+                  ${title}
+                </h3>
+                <div class="flex flex-wrap gap-3 text-sm text-slate-500 mb-4">
+                  <span class="bg-slate-100 px-3 py-1 rounded-lg font-semibold text-slate-700">
+                    <i class="fas fa-calendar mr-1"></i> ${year}
+                  </span>
+                  <span><i class="fas fa-users mr-1"></i> ${authors}</span>
+                  ${journal ? `<span class="italic text-xs">${journal}</span>` : ''}
+                  <span class="relevance-badge ${relevanceClass}">
+                    ${relevanceIcon} ${percent}% Relevancia
+                  </span>
                 </div>
 
-              </details>
+                <details class="group mb-3">
+                  <summary class="text-sm text-indigo-600 cursor-pointer hover:underline font-semibold list-none flex items-center gap-2 w-fit select-none">
+                    <i class="fas fa-chevron-right text-xs transition-transform group-open:rotate-90"></i>
+                    Ver Abstract Original
+                  </summary>
+                  <div class="mt-3 text-slate-600 leading-relaxed text-sm pl-4 border-l-4 border-slate-200">
+                    ${abstract}
+                    <div id="translation-box-${index}" class="hidden"></div>
+                  </div>
+                </details>
+                
+                ${urlButton}
+              </div>
 
+              <div class="flex flex-col gap-3 min-w-[140px]">
+                <button onclick="setDecision(${index}, 'included')"
+                        class="px-5 py-3 rounded-xl border-2 border-emerald-200 text-emerald-700 text-sm font-bold hover:bg-emerald-50 transition flex items-center justify-center gap-2 bg-white shadow-md hover:shadow-xl">
+                  <i class="fas fa-check"></i> Incluir
+                </button>
+                <button onclick="setDecision(${index}, 'excluded')"
+                        class="px-5 py-3 rounded-xl border-2 border-red-200 text-red-700 text-sm font-bold hover:bg-red-50 transition flex items-center justify-center gap-2 bg-white shadow-md hover:shadow-xl">
+                  <i class="fas fa-times"></i> Excluir
+                </button>
+              </div>
             </div>
-
-
-
-            <div class="flex flex-col gap-3 min-w-[140px]">
-
-              <button onclick="setDecision(${index}, 'included')" 
-
-                      class="px-5 py-3 rounded-xl border-2 border-emerald-200 text-emerald-700 text-sm font-bold hover:bg-emerald-50 transition flex items-center justify-center gap-2 bg-white shadow-md hover:shadow-xl">
-
-                <i class="fas fa-check"></i> Incluir
-
-              </button>
-
-              <button onclick="setDecision(${index}, 'excluded')" 
-
-                      class="px-5 py-3 rounded-xl border-2 border-red-200 text-red-700 text-sm font-bold hover:bg-red-50 transition flex items-center justify-center gap-2 bg-white shadow-md hover:shadow-xl">
-
-                <i class="fas fa-times"></i> Excluir
-
-              </button>
-
-            </div>
-
           </div>
-
+          <div id="ai-container-${index}" class="ai-container hidden"></div>
         </div>
-
-        <div id="ai-container-${index}" class="ai-container hidden"></div>
-
-      </div>
-
-    `;
-
-    
-
-    return card;
-
-  }
-
-
-
-  // ============================================================
-
-  // 🚀 INICIALIZACIÓN
-
-  // ============================================================
-
-  let activeColumns = [];
-
-  let taskQueue = [];
-
-  let isProcessing = false;
-
-  let totalTasks = 0;
-
-  let completedTasks = 0;
-
-  let decisions = new Set();
-
-
-
-  // Inicializar cuando el DOM esté listo
-
-  document.addEventListener('DOMContentLoaded', function() {
-
-    console.log("🚀 Inicializando aplicación...");
-
-    
-
-    const success = loadArticles();
-
-    if (success) {
-
-      renderArticles();
-
-    }
-
-  });
-
-
-
-  // ============================================================
-
-  // AGREGAR COLUMNA
-
-  // ============================================================
-
-  window.addColumn = function(colName) {
-
-    if (activeColumns.includes(colName)) {
-
-      console.log(`⚠️ Columna '${colName}' ya está activa`);
-
-      return;
-
-    }
-
-    
-
-    activeColumns.push(colName);
-
-
-
-    const btn = document.getElementById(`btn-${colName}`);
-
-    if(btn) {
-
-      btn.classList.add('active');
-
-      btn.onclick = null;
-
-      btn.innerHTML += ' <i class="fas fa-check ml-auto"></i>';
-
-    }
-
-
-
-    articlesData.forEach((_, index) => {
-
-      const container = document.getElementById(`ai-container-${index}`);
-
-      if(!container) return;
-
-
-
-      container.classList.remove('hidden');
-
-      
-
-      const meta = getColumnMeta(colName);
-
-      const cellId = `cell-${index}-${colName}`;
-
-      const div = document.createElement('div');
-
-      div.className = 'ai-cell fade-in';
-
-      div.id = cellId;
-
-      div.innerHTML = `
-
-        <h5><i class="${meta.icon} ${meta.color}"></i> ${meta.title}</h5>
-
-        <div class="text-slate-400 text-xs animate-pulse flex items-center gap-2">
-
-          <i class="fas fa-circle-notch fa-spin"></i> En cola...
-
-        </div>
-
       `;
 
-      container.appendChild(div);
+      return card;
+    }
 
-      
+    // ============================================================
+    // 📊 METADATOS DE COLUMNAS
+    // ============================================================
+    function getColumnMeta(col) {
+      const map = {
+        'methodology': { title: 'Metodología', icon: 'fas fa-microscope', color: 'text-purple-500' },
+        'population': { title: 'Población', icon: 'fas fa-users', color: 'text-orange-500' },
+        'key_findings': { title: 'Hallazgos', icon: 'fas fa-lightbulb', color: 'text-yellow-500' },
+        'limitations': { title: 'Limitaciones', icon: 'fas fa-exclamation-triangle', color: 'text-red-500' },
+        'summary': { title: 'Resumen', icon: 'fas fa-align-left', color: 'text-blue-500' },
+        'study_design': { title: 'Diseño', icon: 'fas fa-project-diagram', color: 'text-cyan-600' },
+        'objectives': { title: 'Objetivos', icon: 'fas fa-bullseye', color: 'text-emerald-600' },
+        'independent_variables': { title: 'Vars. Indep.', icon: 'fas fa-sliders-h', color: 'text-indigo-500' },
+        'dependent_variables': { title: 'Vars. Dep.', icon: 'fas fa-chart-line', color: 'text-pink-500' }
+      };
+      return map[col] || { title: col, icon: 'fas fa-robot', color: 'text-gray-500' };
+    }
 
-      taskQueue.push({ type: 'column', articleId: index, columnName: colName, cellId: cellId });
-
-      totalTasks++;
-
-    });
-
-
-
-    processQueue();
-
-  };
-
-
-
-  function getColumnMeta(col) {
-
-    const map = {
-
-      'methodology': { title: 'Metodología', icon: 'fas fa-microscope', color: 'text-purple-500' },
-
-      'population': { title: 'Población', icon: 'fas fa-users', color: 'text-orange-500' },
-
-      'key_findings': { title: 'Hallazgos', icon: 'fas fa-lightbulb', color: 'text-yellow-500' },
-
-      'limitations': { title: 'Limitaciones', icon: 'fas fa-exclamation-triangle', color: 'text-red-500' },
-
-      'summary': { title: 'Resumen', icon: 'fas fa-align-left', color: 'text-blue-500' },
-
-      // Nuevas columnas
-
-      'study_design': { title: 'Diseño', icon: 'fas fa-project-diagram', color: 'text-cyan-600' },
-
-      'objectives': { title: 'Objetivos', icon: 'fas fa-bullseye', color: 'text-emerald-600' },
-
-      'independent_variables': { title: 'Vars. Indep.', icon: 'fas fa-sliders-h', color: 'text-indigo-500' },
-
-      'dependent_variables': { title: 'Vars. Dep.', icon: 'fas fa-chart-line', color: 'text-pink-500' }
-
-    };
-
-    return map[col] || { title: col, icon: 'fas fa-robot', color: 'text-gray-500' };
-
-  }
-
-
-
-  // ============================================================
-
-  // TRADUCCIÓN
-
-  // ============================================================
-
-  window.translateAllAbstracts = function() {
-
-    const btn = document.getElementById('btn-translate-all');
-
-    btn.classList.add('active');
-
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin text-blue-500 mr-2"></i> Procesando...';
-
-    
-
-    articlesData.forEach((art, idx) => {
-
-      if(art.abstract && art.abstract.length > 20) {
-
-        taskQueue.push({ type: 'translate', articleId: idx });
-
-        totalTasks++;
-
+    // ============================================================
+    // ➕ AGREGAR COLUMNA IA
+    // ============================================================
+    window.addColumn = function(colName) {
+      if (activeColumns.includes(colName)) {
+        console.log(`⚠️ Columna '${colName}' ya está activa`);
+        return;
       }
 
-    });
+      activeColumns.push(colName);
 
-    processQueue();
+      const btn = document.getElementById(`btn-${colName}`);
+      if (btn) {
+        btn.classList.add('active');
+        btn.onclick = null;
+        btn.innerHTML += ' <i class="fas fa-check ml-auto"></i>';
+      }
 
-  };
+      articlesData.forEach((_, index) => {
+        const container = document.getElementById(`ai-container-${index}`);
+        if (!container) return;
 
+        container.classList.remove('hidden');
 
+        const meta = getColumnMeta(colName);
+        const cellId = `cell-${index}-${colName}`;
+        const div = document.createElement('div');
+        div.className = 'ai-cell fade-in';
+        div.id = cellId;
+        div.innerHTML = `
+          <h5><i class="${meta.icon} ${meta.color}"></i> ${meta.title}</h5>
+          <div class="text-slate-400 text-xs animate-pulse flex items-center gap-2">
+            <i class="fas fa-circle-notch fa-spin"></i> En cola...
+          </div>
+        `;
+        container.appendChild(div);
 
-  // ============================================================
-
-  // PROCESADOR DE COLA
-
-  // ============================================================
-
-  async function processQueue() {
-
-    if (isProcessing || taskQueue.length === 0) {
-
-      updateQueueUI();
-
-      return;
-
-    }
-
-
-
-    isProcessing = true;
-
-    const task = taskQueue.shift();
-
-    updateQueueUI("active");
-
-
-
-    try {
-
-      if (task.type === 'column') await fetchAIColumn(task);
-
-      if (task.type === 'translate') await fetchTranslation(task);
-
-    } catch (e) {
-
-      console.error("❌ Error en tarea:", e);
-
-    }
-
-
-
-    completedTasks++;
-
-    setTimeout(() => {
-
-      isProcessing = false;
+        taskQueue.push({ type: 'column', articleId: index, columnName: colName, cellId: cellId });
+        totalTasks++;
+      });
 
       processQueue();
-
-    }, 800); // Reducido de 1500ms a 800ms
-
-  }
-
-
-
-  function updateQueueUI(state = "idle") {
-
-    const dot = document.getElementById('agent-status-dot');
-
-    const text = document.getElementById('queue-status');
-
-    const bar = document.getElementById('queue-progress');
-
-    
-
-    if (taskQueue.length === 0 && !isProcessing) {
-
-      dot.className = "w-2.5 h-2.5 rounded-full bg-slate-300";
-
-      text.innerText = "Inactivo";
-
-      bar.style.width = "100%";
-
-      return;
-
-    }
-
-
-
-    dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
-
-    text.innerText = `Procesando (${taskQueue.length} pendientes)`;
-
-    
-
-    const percent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-
-    bar.style.width = `${percent}%`;
-
-  }
-
-
-
-  // ============================================================
-
-  // LLAMADAS AJAX
-
-  // ============================================================
-
-  async function fetchAIColumn(task) {
-
-    const cell = document.getElementById(task.cellId);
-
-    if(!cell) return;
-
-    
-
-    // Indicador de carga
-
-    cell.querySelector('div').innerHTML = `<div class="flex items-center gap-2 text-indigo-600"><i class="fas fa-circle-notch fa-spin"></i> Analizando...</div>`;
-
-
-
-    try {
-
-      const response = await fetch('/generate_column', {
-
-        method: 'POST',
-
-        headers: { 'Content-Type': 'application/json' },
-
-        body: JSON.stringify({ 
-
-          article: articlesData[task.articleId], 
-
-          column_name: task.columnName,
-
-          question: "{{ question }}"
-
-        })
-
-      });
-
-
-
-      if(response.ok) {
-
-        const data = await response.json();
-
-        const contentDiv = cell.querySelector('div');
-
-        
-
-        // ✅ CORRECCIÓN VISUAL:
-
-        // 1. Usamos una clase que permita saltos de línea y buen espaciado
-
-        contentDiv.className = "text-slate-700 mt-2 text-sm leading-relaxed prose prose-sm max-w-none";
-
-        
-
-        // 2. Inyectamos como HTML real. El backend ya envía <b> y <br>.
-
-        contentDiv.innerHTML = data.value; 
-
-        
-
-        // Guardar en datos locales
-
-        if(!articlesData[task.articleId].ai_data) articlesData[task.articleId].ai_data = {};
-
-        articlesData[task.articleId].ai_data[task.columnName] = data.value;
-
-      } else {
-
-        throw new Error(`HTTP ${response.status}`);
-
-      }
-
-    } catch(e) {
-
-      console.error("❌ Error generando columna:", e);
-
-      // Mensaje de error amigable
-
-      cell.querySelector('div').innerHTML = `<div class="text-amber-600 text-xs bg-amber-50 p-2 rounded border border-amber-200 mt-1"><i class="fas fa-exclamation-triangle"></i> No se pudo analizar. Reintentando...</div>`;
-
-      
-
-      // Opcional: Reintentar automáticamente después de 3 segundos
-
-      setTimeout(() => {
-
-          // Solo reintentar si sigue mostrando error (para evitar bucles infinitos si es error fatal)
-
-          if(cell.querySelector('div').innerText.includes("No se pudo analizar")) {
-
-              fetchAIColumn(task); 
-
-          }
-
-      }, 3000);
-
-    }
-
-  }
-
-
-
-  async function fetchTranslation(task) {
-
-    const box = document.getElementById(`translation-box-${task.articleId}`);
-
-    if(!box) return;
-
-    
-
-    box.classList.remove('hidden');
-
-    box.innerHTML = `<div class="mt-3 p-3 bg-blue-50 rounded-lg text-blue-500 text-xs">
-
-      <i class="fas fa-spinner fa-spin"></i> Traduciendo...
-
-    </div>`;
-
-
-
-    try {
-
-      const response = await fetch('/translate_abstract', {
-
-        method: 'POST',
-
-        headers: { 'Content-Type': 'application/json' },
-
-        body: JSON.stringify({ 
-
-          article_id: task.articleId, 
-
-          abstract: articlesData[task.articleId].abstract 
-
-        })
-
-      });
-
-
-
-      if(response.ok) {
-
-        const data = await response.json();
-
-        box.className = "mt-3 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500";
-
-        box.innerHTML = `<strong class="text-blue-700">[ES]</strong> <span class="text-slate-700">${escapeHtml(data.translation)}</span>`;
-
-        articlesData[task.articleId].translation = data.translation;
-
-      } else {
-
-        throw new Error(`HTTP ${response.status}`);
-
-      }
-
-    } catch(e) { 
-
-      console.error("❌ Error traduciendo:", e);
-
-      box.innerHTML = `<span class="text-red-400">Error de traducción</span>`;
-
-    }
-
-  }
-
-
-
-  // ============================================================
-
-  // DECISIONES
-
-  // ============================================================
-
-  window.setDecision = function(id, decision) {
-
-    const card = document.getElementById(`card-${id}`);
-
-    if (!card) return;
-
-    
-
-    card.classList.remove('included', 'excluded');
-
-    
-
-    if (decision === 'included') {
-
-      card.classList.add('included');
-
-      decisions.add(id);
-
-    } else {
-
-      card.classList.add('excluded');
-
-      decisions.delete(id);
-
-    }
-
-    document.getElementById('count-included').innerText = decisions.size;
-
-  };
-
-
-
-  // ============================================================
-
-  // FINALIZAR
-
-  // ============================================================
-
-  window.submitScreening = async function() {
-
-    if (decisions.size === 0) {
-
-      if(!confirm("No has incluido ningún artículo. ¿Continuar de todas formas?")) return;
-
-    }
-
-    
-
-    const btn = document.querySelector('button[onclick="submitScreening()"]');
-
-    btn.disabled = true;
-
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando decisiones...';
-
-
-
-    let payload = {
-
-      sessionId: "{{ session_id }}",
-
-      question: "{{ question }}",
-
-      articles: {}
-
     };
 
+    // ============================================================
+    // 🌐 TRADUCIR TODOS LOS ABSTRACTS
+    // ============================================================
+    window.translateAllAbstracts = function() {
+      const btn = document.getElementById('btn-translate-all');
+      btn.classList.add('active');
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin text-blue-500 mr-2"></i> Procesando...';
 
-
-    articlesData.forEach((art, idx) => {
-
-      let status = 'pending';
-
-      const card = document.getElementById(`card-${idx}`);
-
-      if (card && card.classList.contains('included')) status = 'included';
-
-      if (card && card.classList.contains('excluded')) status = 'excluded';
-
-
-
-      payload.articles[idx] = {
-
-        status: status,
-
-        data: art,
-
-        aiGeneratedFields: art.ai_data || {},
-
-        translation: art.translation || ""
-
-      };
-
-    });
-
-
-
-    try {
-
-      const res = await fetch('/submit_screening', {
-
-        method: 'POST',
-
-        headers: {'Content-Type': 'application/json'},
-
-        body: JSON.stringify(payload)
-
+      articlesData.forEach((art, idx) => {
+        if (art.abstract && art.abstract.length > 20) {
+          taskQueue.push({ type: 'translate', articleId: idx });
+          totalTasks++;
+        }
       });
+      processQueue();
+    };
 
-      
-
-      if(res.ok) {
-
-        const html = await res.text();
-
-        document.open(); 
-
-        document.write(html); 
-
-        document.close();
-
-      } else {
-
-        throw new Error(`Error del servidor: ${res.status}`);
-
+    // ============================================================
+    // ⚙️ PROCESADOR DE COLA
+    // ============================================================
+    async function processQueue() {
+      if (isProcessing || taskQueue.length === 0) {
+        updateQueueUI();
+        return;
       }
 
-    } catch(e) {
+      isProcessing = true;
+      const task = taskQueue.shift();
+      updateQueueUI("active");
 
-      alert(`Error de conexión: ${e.message}`);
+      try {
+        if (task.type === 'column') await fetchAIColumn(task);
+        if (task.type === 'translate') await fetchTranslation(task);
+      } catch (e) {
+        console.error("❌ Error en tarea:", e);
+      }
 
-      btn.disabled = false;
-
-      btn.innerHTML = '<i class="fas fa-arrow-right"></i> Finalizar Revisión';
-
+      completedTasks++;
+      setTimeout(() => {
+        isProcessing = false;
+        processQueue();
+      }, 600); // 600ms entre requests para Gemini (15 RPM = 1 cada 4s, pero con margen)
     }
 
-  };
+    function updateQueueUI(state = "idle") {
+      const dot = document.getElementById('agent-status-dot');
+      const text = document.getElementById('queue-status');
+      const bar = document.getElementById('queue-progress');
 
-  </script>
+      if (taskQueue.length === 0 && !isProcessing) {
+        dot.className = "w-2.5 h-2.5 rounded-full bg-slate-300";
+        text.innerText = "Inactivo";
+        bar.style.width = "100%";
+        return;
+      }
 
-  <script id="articles-data" type="application/json">
-  {{ articles | tojson | safe }}
-  </script>
-  
-  <script>
-    // Esta línea va DENTRO de tu función loadArticles(), reemplazando la anterior
-    const rawData = JSON.parse(document.getElementById('articles-data').textContent.trim());
-    console.log("Artículos cargados:", rawData.length); // ← debe decir 50
+      dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse";
+      text.innerText = `Procesando (${taskQueue.length} pendientes)`;
+
+      const percent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+      bar.style.width = `${percent}%`;
+    }
+
+    // ============================================================
+    // 🤖 LLAMADAS AJAX - GENERAR COLUMNA IA
+    // ============================================================
+    async function fetchAIColumn(task) {
+      const cell = document.getElementById(task.cellId);
+      if (!cell) return;
+
+      // Indicador de carga
+      cell.querySelector('div').innerHTML = `
+        <div class="flex items-center gap-2 text-indigo-600">
+          <i class="fas fa-circle-notch fa-spin"></i> Analizando con Gemini...
+        </div>`;
+
+      try {
+        const response = await fetch('/generate_column', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            article: articlesData[task.articleId],
+            column_name: task.columnName,
+            question: RESEARCH_QUESTION
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const contentDiv = cell.querySelector('div');
+
+          // Clase para formateo correcto
+          contentDiv.className = "text-slate-700 mt-2 text-sm leading-relaxed prose prose-sm max-w-none";
+
+          // Inyectar HTML (el backend ya envía formato HTML)
+          contentDiv.innerHTML = data.value;
+
+          // Guardar en datos locales
+          if (!articlesData[task.articleId].ai_data) {
+            articlesData[task.articleId].ai_data = {};
+          }
+          articlesData[task.articleId].ai_data[task.columnName] = data.value;
+
+        } else {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      } catch (e) {
+        console.error("❌ Error generando columna:", e);
+        cell.querySelector('div').innerHTML = `
+          <div class="text-amber-600 text-xs bg-amber-50 p-2 rounded border border-amber-200 mt-1">
+            <i class="fas fa-exclamation-triangle"></i> No se pudo analizar. Reintentando...
+          </div>`;
+
+        // Reintentar después de 3 segundos (solo una vez)
+        setTimeout(() => {
+          if (cell.querySelector('div').innerText.includes("No se pudo analizar")) {
+            taskQueue.push(task); // Volver a agregar a la cola
+            processQueue();
+          }
+        }, 3000);
+      }
+    }
+
+    // ============================================================
+    // 🌐 LLAMADAS AJAX - TRADUCIR ABSTRACT
+    // ============================================================
+    async function fetchTranslation(task) {
+      const box = document.getElementById(`translation-box-${task.articleId}`);
+      if (!box) return;
+
+      box.classList.remove('hidden');
+      box.innerHTML = `
+        <div class="mt-3 p-3 bg-blue-50 rounded-lg text-blue-500 text-xs">
+          <i class="fas fa-spinner fa-spin"></i> Traduciendo con Gemini...
+        </div>`;
+
+      try {
+        const response = await fetch('/translate_abstract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            article_id: task.articleId,
+            abstract: articlesData[task.articleId].abstract
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          box.className = "mt-3 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500";
+          box.innerHTML = `
+            <strong class="text-blue-700">[ES]</strong> 
+            <span class="text-slate-700">${escapeHtml(data.translation)}</span>`;
+          articlesData[task.articleId].translation = data.translation;
+        } else {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      } catch (e) {
+        console.error("❌ Error traduciendo:", e);
+        box.innerHTML = `<span class="text-red-400 text-xs">Error de traducción</span>`;
+      }
+    }
+
+    // ============================================================
+    // ✅ GESTIÓN DE DECISIONES (INCLUIR/EXCLUIR)
+    // ============================================================
+    window.setDecision = function(id, decision) {
+      const card = document.getElementById(`card-${id}`);
+      if (!card) return;
+
+      card.classList.remove('included', 'excluded');
+
+      if (decision === 'included') {
+        card.classList.add('included');
+        decisions.add(id);
+      } else {
+        card.classList.add('excluded');
+        decisions.delete(id);
+      }
+      document.getElementById('count-included').innerText = decisions.size;
+    };
+
+    // ============================================================
+    // 📤 ENVIAR RESULTADOS AL SERVIDOR
+    // ============================================================
+    window.submitScreening = async function() {
+      if (decisions.size === 0) {
+        if (!confirm("No has incluido ningún artículo. ¿Continuar de todas formas?")) return;
+      }
+
+      const btn = document.querySelector('button[onclick="submitScreening()"]');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando decisiones...';
+
+      let payload = {
+        sessionId: SESSION_ID,
+        question: RESEARCH_QUESTION,
+        articles: {}
+      };
+
+      articlesData.forEach((art, idx) => {
+        let status = 'pending';
+        const card = document.getElementById(`card-${idx}`);
+        if (card && card.classList.contains('included')) status = 'included';
+        if (card && card.classList.contains('excluded')) status = 'excluded';
+
+        payload.articles[idx] = {
+          status: status,
+          data: art,
+          aiGeneratedFields: art.ai_data || {},
+          translation: art.translation || ""
+        };
+      });
+
+      try {
+        const res = await fetch('/submit_screening', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          const html = await res.text();
+          document.open();
+          document.write(html);
+          document.close();
+        } else {
+          throw new Error(`Error del servidor: ${res.status}`);
+        }
+      } catch (e) {
+        alert(`Error de conexión: ${e.message}`);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-arrow-right"></i> Finalizar Revisión';
+      }
+    };
+
+    // ============================================================
+    // 🚀 INICIALIZACIÓN AL CARGAR EL DOM
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log("🚀 Inicializando PRISMA Screening...");
+
+      const success = loadArticles();
+      if (success) {
+        renderArticles();
+      }
+    });
+
+  })(); // IIFE para encapsular scope
   </script>
 </body>
 </html>
