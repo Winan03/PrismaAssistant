@@ -3,361 +3,374 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Filtros PRISMA - UPAO</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <title>Criterios de Filtrado — PRISMA Assistant</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <style>
-    body { font-family: 'Inter', sans-serif; }
-    
-    .gradient-hero {
-      background: linear-gradient(135deg, #1e3a8a 0%, #5b21b6 50%, #059669 100%);
-      position: relative;
-      overflow: hidden;
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #0f766e;
+      --primary-light: #14b8a6;
+      --primary-bg: #f0fdfa;
+      --accent: #1e40af;
+      --bg: #f8fafb;
+      --card: #ffffff;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+      --shadow-lg: 0 4px 20px rgba(0,0,0,0.08);
+      --radius: 16px;
+      --orange: #ea580c;
+      --orange-bg: #fff7ed;
     }
-    .gradient-hero::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.3), transparent 50%);
-      pointer-events: none;
+    body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── Navbar ── */
+    .navbar {
+      background: var(--card); border-bottom: 1px solid var(--border);
+      padding: 0 2rem; height: 64px; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
     }
-    
-    .filter-chip {
-      transition: all 0.3s ease;
-      cursor: pointer;
+    .navbar-brand { font-weight: 800; font-size: 1.1rem; color: var(--primary); display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-steps { display: flex; gap: 0; list-style: none; }
+    .nav-step {
+      display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+      font-size: 0.8rem; font-weight: 600; color: var(--text-muted); position: relative;
     }
-    .filter-chip:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    .nav-step.active { color: var(--primary); }
+    .nav-step .step-num {
+      width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: 800; background: #f1f5f9; color: var(--text-muted);
     }
-    .filter-chip.active {
-      background: linear-gradient(135deg, #10b981, #059669);
-      color: white;
-      border-color: #10b981;
+    .nav-step.done .step-num { background: var(--primary); color: #fff; }
+    .nav-step.active .step-num { background: var(--primary); color: #fff; }
+    .nav-step + .nav-step::before {
+      content: ''; width: 24px; height: 2px; background: var(--border); margin-right: 8px;
     }
 
-    /* --- NUEVO: Estilo para filtros desactivados --- */
-    .filter-chip.disabled {
-      cursor: not-allowed;
-      background-color: #f3f4f6; /* bg-gray-100 */
-      border-color: #e5e7eb; /* border-gray-200 */
-      color: #9ca3af; /* text-gray-400 */
-      opacity: 0.7;
+    /* ── Page Header ── */
+    .page-header { text-align: center; padding: 3rem 1.5rem 1.5rem; }
+    .page-header h1 { font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; }
+    .page-header p { color: var(--text-muted); max-width: 550px; margin: 0 auto; font-size: 0.9rem; }
+
+    /* ── Stats Bar ── */
+    .stats-bar {
+      max-width: 800px; margin: 0 auto 2rem; padding: 0 1.5rem;
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;
     }
-    .filter-chip.disabled:hover {
-      transform: none;
-      box-shadow: none;
-    }
-    
     .stat-card {
-      transition: all 0.3s ease;
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 1rem; text-align: center;
     }
-    .stat-card:hover {
-      transform: scale(1.02);
+    .stat-card .label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600; margin-bottom: 4px; }
+    .stat-card .value { font-size: 1.6rem; font-weight: 800; }
+    .stat-card .value.indigo { color: var(--accent); }
+    .stat-card .value.green { color: var(--primary); }
+    .stat-card .value.orange { color: var(--orange); }
+    .stat-card .value.purple { color: #7c3aed; }
+    .stat-card .sub { font-size: 0.65rem; color: var(--text-muted); margin-top: 2px; }
+
+    /* ── Main Content ── */
+    .content { max-width: 800px; margin: 0 auto; padding: 0 1.5rem 3rem; }
+
+    /* ── Filter Cards ── */
+    .filter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+    .filter-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 1.5rem; box-shadow: var(--shadow);
     }
-    
-    .btn-glow {
-      background: linear-gradient(135deg, #059669, #10b981);
-      transition: all 0.4s ease;
+    .filter-card.full { grid-column: 1 / -1; }
+    .filter-card h3 {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.9rem; font-weight: 700; margin-bottom: 1rem;
     }
-    .btn-glow:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 20px 40px rgba(5, 150, 105, 0.4);
+    .filter-card h3 i { color: var(--primary); font-size: 0.85rem; }
+    .filter-card .hint { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem; }
+
+    /* ── Year Inputs ── */
+    .year-row { display: flex; gap: 12px; align-items: center; }
+    .year-input {
+      flex: 1; border: 2px solid var(--border); border-radius: 10px; padding: 10px 14px;
+      font-family: inherit; font-size: 0.9rem; font-weight: 600; text-align: center;
+      outline: none; transition: border-color 0.2s;
+    }
+    .year-input:focus { border-color: var(--primary-light); }
+    .year-sep { color: var(--text-muted); font-weight: 600; }
+
+    /* ── Toggle Switch ── */
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .toggle-label { font-size: 0.85rem; color: var(--text); font-weight: 500; }
+    .toggle-sub { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+    .toggle-switch {
+      position: relative; width: 48px; height: 26px; cursor: pointer;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-track {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: #cbd5e1; border-radius: 13px; transition: background 0.3s;
+    }
+    .toggle-thumb {
+      position: absolute; top: 3px; left: 3px; width: 20px; height: 20px;
+      background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      transition: transform 0.3s;
+    }
+    .toggle-switch input:checked + .toggle-track { background: var(--primary); }
+    .toggle-switch input:checked + .toggle-track .toggle-thumb { transform: translateX(22px); }
+
+    /* ── Language / Journal Chips ── */
+    .chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border: 2px solid var(--border); border-radius: 10px;
+      font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+      background: var(--card); color: var(--text);
+      user-select: none;
+    }
+    .chip:hover { border-color: var(--primary-light); background: var(--primary-bg); }
+    .chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .chip input { display: none; }
+    .chip .count { 
+      background: #f1f5f9; color: var(--text-muted); font-size: 0.7rem;
+      padding: 1px 7px; border-radius: 8px; font-weight: 700;
+    }
+    .chip.active .count { background: rgba(255,255,255,0.25); color: #fff; }
+
+    /* ── Journals list (scrollable) ── */
+    .journal-list {
+      max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+      padding-right: 8px;
+    }
+    .journal-list::-webkit-scrollbar { width: 4px; }
+    .journal-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .journal-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; border-radius: 10px; background: #f8fafc; cursor: pointer;
+      transition: background 0.15s; font-size: 0.8rem;
+    }
+    .journal-item:hover { background: var(--primary-bg); }
+    .journal-item .name { font-weight: 500; flex: 1; margin-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .journal-item .jcount { font-size: 0.7rem; color: var(--text-muted); background: #e2e8f0; padding: 2px 8px; border-radius: 8px; font-weight: 700; margin-right: 8px; }
+    .journal-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; }
+
+    /* ── Info Box ── */
+    .info-box {
+      background: #f0fdf4; border-left: 4px solid var(--primary); border-radius: 0 12px 12px 0;
+      padding: 1rem 1.5rem; margin-bottom: 1rem;
+      display: flex; align-items: flex-start; gap: 12px;
+    }
+    .info-box i { color: var(--primary); margin-top: 2px; }
+    .info-box p { font-size: 0.8rem; color: var(--text); line-height: 1.5; }
+    .info-box strong { font-weight: 700; }
+
+    /* ── Submit Button ── */
+    .btn-submit {
+      width: 100%; padding: 16px; border: none; border-radius: 14px;
+      background: var(--primary); color: #fff; font-family: inherit;
+      font-size: 1rem; font-weight: 700; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    }
+    .btn-submit:hover { background: #0d5f58; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(15,118,110,0.3); }
+    .btn-submit:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+    .btn-count-text { font-size: 0.85rem; font-weight: 400; opacity: 0.9; }
+
+    @media (max-width: 640px) {
+      .filter-grid { grid-template-columns: 1fr; }
+      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+      .nav-steps { display: none; }
     }
   </style>
 </head>
-<body class="bg-gradient-to-br from-slate-50 to-indigo-50 min-h-screen">
+<body>
 
-  <!-- Hero Simplificado -->
-  <div class="gradient-hero py-12 relative">
-    <div class="container mx-auto px-6 max-w-6xl text-center text-white">
-      <h1 class="text-4xl font-bold mb-3">
-        <i class="fas fa-filter mr-3"></i>
-        Criterios de Inclusión/Exclusión
-      </h1>
-      <p class="text-xl text-white/90">
-        Aplica filtros para refinar tu revisión sistemática
-      </p>
+  <!-- Navbar con pasos -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand"><i class="fas fa-flask"></i> PRISMA Assistant</a>
+    <ul class="nav-steps">
+      <li class="nav-step done"><span class="step-num">1</span> Búsqueda</li>
+      <li class="nav-step active"><span class="step-num">2</span> Filtros</li>
+      <li class="nav-step"><span class="step-num">3</span> Screening</li>
+      <li class="nav-step"><span class="step-num">4</span> Resultados</li>
+    </ul>
+  </nav>
+
+  <!-- Header -->
+  <header class="page-header">
+    <h1>Criterios de Inclusión y Exclusión</h1>
+    <p>Defina los parámetros de su Revisión Sistemática. Los filtros se aplicarán automáticamente.</p>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="label">Encontrados</div>
+      <div class="value indigo" id="total-articles">{{ raw_total }}</div>
+      <div class="sub">búsqueda bruta</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Tras Filtros</div>
+      <div class="value green" id="filtered-count">{{ total }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Duplicados</div>
+      <div class="value orange" id="duplicates-count">{{ duplicates_removed }}</div>
+      <div class="sub">eliminados</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Finales</div>
+      <div class="value purple" id="final-count">{{ total }}</div>
     </div>
   </div>
 
-  <div class="container mx-auto px-6 max-w-6xl -mt-8 relative z-10">
-    
-    <!-- Estadísticas Principales -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-      <div class="bg-white/90 backdrop-blur-md p-5 rounded-2xl shadow-xl stat-card border border-white/50">
-        <div class="text-sm text-gray-600 mb-2 font-semibold">Artículos Encontrados</div>
-        <div class="text-3xl font-bold text-indigo-600" id="total-articles">{{ total }}</div>
-      </div>
-      <div class="bg-white/90 backdrop-blur-md p-5 rounded-2xl shadow-xl stat-card border border-white/50">
-        <div class="text-sm text-gray-600 mb-2 font-semibold">Después de Filtros</div>
-        <div class="text-3xl font-bold text-emerald-600" id="filtered-count">{{ total }}</div>
-      </div>
-      <div class="bg-white/90 backdrop-blur-md p-5 rounded-2xl shadow-xl stat-card border border-white/50">
-        <div class="text-sm text-gray-600 mb-2 font-semibold">Duplicados (est.)</div>
-        <div class="text-3xl font-bold text-orange-600" id="duplicates-count">0</div>
-      </div>
-      <div class="bg-white/90 backdrop-blur-md p-5 rounded-2xl shadow-xl stat-card border border-white/50">
-        <div class="text-sm text-gray-600 mb-2 font-semibold">Artículos Finales</div>
-        <div class="text-3xl font-bold text-purple-600" id="final-count">{{ total }}</div>
-      </div>
-    </div>
-
-    <!-- Formulario de Filtros -->
-    <form action="/apply_filters" method="post" id="filter-form" class="space-y-6">
+  <!-- Filters Form -->
+  <div class="content">
+    <form action="/apply_filters" method="post" id="filter-form">
       <input type="hidden" name="session_id" value="{{ session_id }}">
       <input type="hidden" name="question" value="{{ question }}">
-      
-      <!-- Rango de Años -->
-      <div class="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-white/50">
-        <h3 class="text-xl font-bold mb-6 flex items-center gap-3 text-gray-800">
-          <i class="fas fa-calendar-range text-emerald-600"></i>
-          Rango de Años
-        </h3>
-        <div class="grid grid-cols-2 gap-6">
-          <div>
-            <label class="block text-sm font-semibold mb-2 text-gray-700">Año Inicio</label>
-            <input type="number" name="start_year" id="start_year" 
-                   value="{{ year_min }}" min="{{ year_min }}" max="{{ year_max }}"
-                   class="w-full p-4 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 transition-all">
-          </div>
-          <div>
-            <label class="block text-sm font-semibold mb-2 text-gray-700">Año Final</label>
-            <input type="number" name="end_year" id="end_year"
-                   value="{{ year_max }}" min="{{ year_min }}" max="{{ year_max }}"
-                   class="w-full p-4 border-2 border-gray-200 rounded-xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 transition-all">
+
+      <!-- Row 1: Años + Open Access -->
+      <div class="filter-grid">
+        <!-- Rango de Años -->
+        <div class="filter-card">
+          <h3><i class="fas fa-calendar-days"></i> Rango de Años</h3>
+          <p class="hint">Limite la antigüedad de las publicaciones.</p>
+          <div class="year-row">
+            <input type="number" name="start_year" id="start_year" value="{{ year_min }}" min="{{ year_min }}" max="{{ year_max }}" class="year-input">
+            <span class="year-sep">—</span>
+            <input type="number" name="end_year" id="end_year" value="{{ year_max }}" min="{{ year_min }}" max="{{ year_max }}" class="year-input">
           </div>
         </div>
-        <div class="mt-4 text-sm text-emerald-600 flex items-center gap-2">
-          <i class="fas fa-info-circle"></i>
-          Rango disponible: {{ year_min }} - {{ year_max }}
-        </div>
-      </div>
 
-      <!-- Cuartiles -->
-      <div class="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-white/50">
-        <h3 class="text-xl font-bold mb-4 flex items-center gap-3 text-gray-800">
-          <i class="fas fa-ranking-star text-emerald-600"></i>
-          Cuartil de Revistas (Scimago/JCR)
-        </h3>
-        <div class="flex flex-wrap gap-3">
-          <!-- --- MODIFICACIÓN: Añadir clase 'disabled' y 'title' --- -->
-          {% for q in ['Q1', 'Q2', 'Q3', 'Q4'] %}
-          <label class="filter-chip px-6 py-3 border-2 border-gray-300 rounded-xl font-semibold flex items-center gap-2 disabled"
-                 title="Filtro desactivado: Los metadatos de cuartil (Q1, Q2...) no son proporcionados por las APIs de búsqueda.">
-            <input type="checkbox" name="quartiles" value="{{ q }}" class="hidden quartile-checkbox" disabled> <!-- Añadir 'disabled' al input -->
-            <i class="fas fa-medal text-yellow-500"></i>
-            {{ q }}
-          </label>
-          {% endfor %}
-        </div>
-        <!-- --- MODIFICACIÓN: Añadir nota de desactivación --- -->
-        <p class="text-sm text-gray-600 mt-4 flex items-center gap-2">
-          <i class="fas fa-info-circle text-orange-500"></i>
-          Nota: El filtrado por cuartiles está desactivado. Las APIs no proporcionan esta información.
-        </p>
-      </div>
-
-      <!-- Open Access -->
-      <div class="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-white/50">
-        <h3 class="text-xl font-bold mb-4 flex items-center gap-3 text-gray-800">
-          <i class="fas fa-lock-open text-emerald-600"></i>
-          Acceso Abierto
-        </h3>
-        <label class="filter-chip px-6 py-3 border-2 border-gray-300 rounded-xl font-semibold inline-flex items-center gap-3 bg-white hover:bg-gray-50">
-          <input type="checkbox" name="open_access" value="true" class="hidden" id="open-access-checkbox">
-          <i class="fas fa-check-circle text-emerald-600"></i>
-          Solo artículos de acceso abierto
-        </label>
-      </div>
-
-      <!-- Idiomas -->
-      <div class="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-white/50">
-        <h3 class="text-xl font-bold mb-4 flex items-center gap-3 text-gray-800">
-          <i class="fas fa-language text-emerald-600"></i>
-          Idiomas Detectados
-        </h3>
-        <div class="flex flex-wrap gap-3">
-          {% for lang in languages %}
-            <!-- --- MODIFICACIÓN: Solo mostrar idiomas que tienen artículos --- -->
-            {% if lang.count > 0 %}
-            <label class="filter-chip px-6 py-3 border-2 border-gray-300 rounded-xl font-semibold bg-white hover:bg-gray-50">
-              <input type="checkbox" name="languages" value="{{ lang.code }}" class="hidden language-checkbox">
-              <span class="text-2xl mr-2">{{ lang.flag }}</span>
-              {{ lang.name }} ({{ lang.count }})
-            </label>
-            {% endif %}
-          {% endfor %}
-        </div>
-      </div>
-
-      <!-- Top Journals -->
-      <!-- --- MODIFICACIÓN: Cambiar de Top 20 a Todas las revistas --- -->
-      <div class="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl p-8 border border-white/50">
-        <h3 class="text-xl font-bold mb-4 flex items-center gap-3 text-gray-800">
-          <i class="fas fa-book text-emerald-600"></i>
-          Revistas Encontradas ({{ all_journals | length }})
-        </h3>
-        <div class="space-y-2 max-h-72 overflow-y-auto pr-2">
-          <!-- Iterar sobre 'all_journals' en lugar de 'top_journals' -->
-          {% for journal in all_journals %}
-          <label class="filter-chip px-4 py-3 border-2 border-gray-300 rounded-xl flex items-center justify-between bg-white hover:bg-gray-50">
-            <span class="font-medium text-gray-800">{{ journal.name }}</span>
-            <div class="flex items-center gap-3">
-              <span class="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">({{ journal.count }} arts.)</span>
-              <input type="checkbox" name="journals" value="{{ journal.name }}" class="w-5 h-5 text-emerald-600 rounded focus:ring-emerald-200">
+        <!-- Open Access (ON por defecto) -->
+        <div class="filter-card">
+          <h3><i class="fas fa-lock-open"></i> Open Access</h3>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Priorizar artículos de acceso abierto</div>
+              <div class="toggle-sub">Artículos con PDF disponible gratuitamente</div>
             </div>
-          </label>
-          {% endfor %}
-        </div>
-      </div>
-
-      <!-- Botón de Acción Principal -->
-      <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-l-4 border-emerald-500 p-6 rounded-r-xl mb-6">
-        <div class="flex items-start gap-4">
-          <i class="fas fa-info-circle text-emerald-600 text-2xl mt-1"></i>
-          <div>
-            <p class="font-bold text-gray-800 mb-2">Próximos Pasos:</p>
-            <p class="text-sm text-gray-700">
-              Al continuar, se aplicarán los filtros, se eliminarán duplicados, se realizará el cribado semántico 
-              y se generará la síntesis con IA. Tiempo estimado: <strong>2-4 minutos</strong>.
-            </p>
+            <label class="toggle-switch">
+              <input type="checkbox" name="open_access" value="true" id="open-access-checkbox" checked>
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </label>
           </div>
         </div>
       </div>
 
-      <button type="submit" id="submit-btn"
-              class="w-full btn-glow text-white py-5 px-8 rounded-2xl font-bold text-xl shadow-xl transform transition-all duration-300 flex items-center justify-center gap-4 group">
-        <i class="fas fa-arrow-right text-2xl group-hover:translate-x-2 transition-transform"></i>
-        <span>Continuar con Análisis (<span id="btn-count">{{ total }}</span> artículos)</span>
-      </button>
+      <!-- Row 2: Idiomas + Revistas -->
+      <div class="filter-grid">
+        <!-- Idiomas -->
+        <div class="filter-card">
+          <h3><i class="fas fa-globe"></i> Idiomas</h3>
+          <div class="chip-list">
+            {% for lang in languages %}
+              {% if lang.count > 0 %}
+              <label class="chip" data-filter="language">
+                <input type="checkbox" name="languages" value="{{ lang.code }}" class="language-checkbox">
+                <span>{{ lang.flag }}</span>
+                {{ lang.name }}
+                <span class="count">{{ lang.count }}</span>
+              </label>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
 
-      <p class="text-center text-sm text-gray-500 mt-4 flex items-center justify-center gap-2">
-        <i class="fas fa-download text-emerald-600"></i>
-        <!-- MODIFICACIÓN: Enlace de descarga eliminado, se añadirá en la página de resultados -->
-        <a href="#" id="download-link-placeholder" class="text-gray-500 hover:text-gray-700 font-semibold">
-          (La descarga estará disponible después del análisis)
-        </a>
-      </p>
+        <!-- Revistas -->
+        <div class="filter-card">
+          <h3><i class="fas fa-book-open"></i> Revistas <span style="font-weight:400;color:var(--text-muted);font-size:0.75rem;margin-left:4px">({{ all_journals | length }})</span></h3>
+          <div class="journal-list">
+            {% for journal in all_journals %}
+            <label class="journal-item">
+              <span class="name" title="{{ journal.name }}">{{ journal.name }}</span>
+              <span class="jcount">{{ journal.count }}</span>
+              <input type="checkbox" name="journals" value="{{ journal.name }}">
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Info -->
+      <div class="info-box">
+        <i class="fas fa-circle-info"></i>
+        <p>Al continuar se aplicarán filtros, se eliminarán duplicados y se iniciará el cribado semántico con IA. Tiempo estimado: <strong>2-4 minutos</strong>.</p>
+      </div>
+
+      <!-- Submit -->
+      <button type="submit" id="submit-btn" class="btn-submit">
+        Aplicar Criterios y Continuar
+        <i class="fas fa-arrow-right"></i>
+        <span class="btn-count-text">— <span id="btn-count">{{ total }}</span> artículos</span>
+      </button>
     </form>
   </div>
 
-  <!-- Footer Simplificado -->
-  <footer class="bg-gradient-to-r from-gray-900 to-gray-800 text-white py-8 mt-20">
-    <div class="container mx-auto px-6 text-center">
-      <p class="text-lg font-semibold">
-        © 2025 <span class="text-emerald-400">Universidad Privada Antenor Orrego</span>
-      </p>
-    </div>
-  </footer>
-
   <script>
-    // --- INICIO DE LA CORRECCIÓN DEL BUG ---
-
-    // Función unificada para actualizar todo
-    function handleFilterChange() {
-        // 1. Sincronizar la UI (clase 'active') con el estado REAL del checkbox
-        document.querySelectorAll('.filter-chip').forEach(chip => {
-            const checkbox = chip.querySelector('input[type="checkbox"]');
-            if (checkbox && !checkbox.disabled) { // <-- No aplicar 'active' a chips desactivados
-                chip.classList.toggle('active', checkbox.checked);
-            }
-        });
-        
-        // 2. Llamar a la función que actualiza los contadores vía AJAX
-        updateFilterCount();
-    }
-
-    // 1. Escuchar el evento 'change' en todos los checkboxes dentro de los chips
-    document.querySelectorAll('.filter-chip input[type="checkbox"]').forEach(checkbox => {
-        // No añadir listener a los checkboxes desactivados (como los de cuartiles)
-        if (!checkbox.disabled) {
-            checkbox.addEventListener('change', handleFilterChange);
-        }
+    // ── Chip toggle ──
+    document.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const cb = chip.querySelector('input');
+        cb.checked = !cb.checked;
+        chip.classList.toggle('active', cb.checked);
+        handleFilterChange();
+      });
     });
 
-    // 2. Escuchar el evento 'change' en los inputs de año
+    // ── Year / Toggle changes ──
     document.getElementById('start_year').addEventListener('change', handleFilterChange);
     document.getElementById('end_year').addEventListener('change', handleFilterChange);
-   
-    // --- FIN DE LA CORRECCIÓN DEL BUG ---
+    document.getElementById('open-access-checkbox').addEventListener('change', handleFilterChange);
+    
+    // ── Journal checkboxes ──
+    document.querySelectorAll('.journal-item input').forEach(cb => {
+      cb.addEventListener('change', handleFilterChange);
+    });
 
+    function handleFilterChange() {
+      updateFilterCount();
+    }
 
-    // Actualizar contadores en tiempo real (AJAX REAL)
-    // Esta función ahora es llamada por handleFilterChange()
     async function updateFilterCount() {
-      // Obtener valores del formulario
-      const formEl = document.getElementById('filter-form');
-      const formData = new FormData(formEl);
-      
-      // Convertir checkboxes múltiples a strings separados por comas
-      const journalsChecked = Array.from(formEl.querySelectorAll('input[name="journals"]:checked'))
-        .map(cb => cb.value).join(',');
-      const langsChecked = Array.from(formEl.querySelectorAll('input[name="languages"]:checked'))
-        .map(cb => cb.value).join(',');
-      const quartilesChecked = Array.from(formEl.querySelectorAll('input[name="quartiles"]:checked'))
-        .map(cb => cb.value).join(',');
-      
-      // Crear FormData con formato correcto
+      const form = document.getElementById('filter-form');
+      const fd = new FormData(form);
+
+      const journals = Array.from(form.querySelectorAll('input[name="journals"]:checked')).map(c => c.value).join(',');
+      const langs = Array.from(form.querySelectorAll('input[name="languages"]:checked')).map(c => c.value).join(',');
+
       const data = new FormData();
-      data.append('session_id', formData.get('session_id'));
-      data.append('start_year', formData.get('start_year') || '');
-      data.append('end_year', formData.get('end_year') || '');
-      data.append('journals', journalsChecked);
-      data.append('languages', langsChecked);
-      data.append('quartiles', quartilesChecked);
+      data.append('session_id', fd.get('session_id'));
+      data.append('start_year', fd.get('start_year') || '');
+      data.append('end_year', fd.get('end_year') || '');
+      data.append('journals', journals);
+      data.append('languages', langs);
       data.append('open_access', document.getElementById('open-access-checkbox').checked ? 'true' : 'false');
-      
-      // Mostrar loading
-      document.getElementById('filtered-count').innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-      
+
+      document.getElementById('filtered-count').innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:1rem"></i>';
+
       try {
-        const response = await fetch('/update_filter_count', {
-          method: 'POST',
-          body: data,
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          
-          // Actualizar con datos REALES del servidor
-          document.getElementById('filtered-count').textContent = result.filtered_count;
-          document.getElementById('duplicates-count').textContent = result.duplicates_count;
-          document.getElementById('final-count').textContent = result.final_count;
-          document.getElementById('btn-count').textContent = result.final_count;
-          
-          console.log('✅ Contadores actualizados:', result);
-        } else {
-          console.error('❌ Error del servidor:', response.status);
-          const errorText = await response.text();
-          console.error('Detalle:', errorText);
-          document.getElementById('filtered-count').textContent = '{{ total }}';
+        const res = await fetch('/update_filter_count', { method: 'POST', body: data });
+        if (res.ok) {
+          const r = await res.json();
+          document.getElementById('filtered-count').textContent = r.filtered_count;
+          document.getElementById('duplicates-count').textContent = r.duplicates_count;
+          document.getElementById('final-count').textContent = r.final_count;
+          document.getElementById('btn-count').textContent = r.final_count;
         }
-      } catch (error) {
-        console.error('❌ Error AJAX:', error);
+      } catch (e) {
         document.getElementById('filtered-count').textContent = '{{ total }}';
       }
     }
 
-    // Loading al enviar
+    // ── Submit loading ──
     document.getElementById('filter-form').addEventListener('submit', function() {
       const btn = document.getElementById('submit-btn');
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin text-2xl"></i> Procesando artículos...';
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando artículos...';
       btn.disabled = true;
     });
-
-    // Pequeña corrección: enlace de descarga en filters.html no tiene sentido, 
-    // lo cambiamos a la página de resultados.
-    const downloadLink = document.getElementById('download-link-placeholder');
-    if (downloadLink) {
-        downloadLink.addEventListener('click', (e) => {
-            e.preventDefault();
-            // Podríamos mostrar un mensaje, pero por ahora solo prevenimos el click
-        });
-    }
-
   </script>
-
 </body>
 </html>

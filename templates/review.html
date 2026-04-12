@@ -3,534 +3,380 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Revisión Final - UPAO</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <title>Revisión Final — PRISMA Assistant</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <style>
-    body { font-family: 'Inter', sans-serif; }
-    .gradient-hero {
-      background: linear-gradient(135deg, #0f766e 0%, #1e40af 50%, #6d28d9 100%);
-    }
-    .glass {
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(14px);
-      border: 1px solid rgba(255, 255, 255, 0.25);
-    }
-    .article-card {
-      transition: all 0.3s ease;
-    }
-    .article-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--primary:#0f766e;--primary-light:#14b8a6;--primary-bg:#f0fdfa;--accent:#1e40af;--bg:#f8fafb;--card:#fff;--text:#1e293b;--text-muted:#64748b;--border:#e2e8f0;--radius:14px;--red:#ef4444;--red-bg:#fef2f2;--green:#10b981;--green-bg:#ecfdf5;--blue:#3b82f6;--blue-bg:#eff6ff;--amber:#f59e0b;--amber-bg:#fffbeb;--purple:#7c3aed}
+    body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+    .navbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 2rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+    .navbar-brand{font-weight:800;font-size:1rem;color:var(--primary);display:flex;align-items:center;gap:8px;text-decoration:none}
+    .nav-steps{display:flex;gap:0;list-style:none}
+    .nav-step{display:flex;align-items:center;gap:6px;padding:8px 14px;font-size:0.75rem;font-weight:600;color:var(--text-muted)}
+    .nav-step.active{color:var(--primary)}
+    .nav-step .sn{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:800;background:#f1f5f9;color:var(--text-muted)}
+    .nav-step.done .sn{background:var(--primary);color:#fff}
+    .nav-step.active .sn{background:var(--primary);color:#fff}
+    .nav-step+.nav-step::before{content:'';width:20px;height:2px;background:var(--border);margin-right:6px}
+
+    .content{max-width:900px;margin:0 auto;padding:2rem 1.5rem 3rem}
+    .page-header{text-align:center;padding:2.5rem 0 1.5rem}
+    .page-header h1{font-size:1.6rem;font-weight:800;margin-bottom:0.4rem}
+    .page-header p{color:var(--text-muted);font-size:0.85rem}
+
+    .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem}
+    .stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center}
+    .stat .n{font-size:1.8rem;font-weight:800}
+    .stat .l{font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-top:2px}
+    .stat .n.green{color:var(--primary)} .stat .n.red{color:var(--red)} .stat .n.indigo{color:var(--accent)} .stat .n.purple{color:var(--purple)}
+
+    .section-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+    .section-title{font-size:0.9rem;font-weight:700;margin-bottom:1rem;display:flex;align-items:center;gap:8px}
+    .section-title i{color:var(--primary);font-size:0.85rem}
+
+    .export-btns{display:flex;flex-wrap:wrap;gap:8px}
+    .export-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border:1px solid var(--border);border-radius:10px;font-size:0.78rem;font-weight:700;cursor:pointer;background:var(--card);color:var(--text);transition:all 0.15s;font-family:inherit}
+    .export-btn:hover{border-color:var(--primary-light);background:var(--primary-bg);color:var(--primary)}
+    .export-btn i{font-size:0.75rem}
+
+    .article-item{border-left:3px solid var(--green);background:var(--card);border-radius:0 var(--radius) var(--radius) 0;padding:1rem 1.2rem;margin-bottom:10px;transition:box-shadow 0.15s}
+    .article-item:hover{box-shadow:0 2px 10px rgba(0,0,0,0.05)}
+    .article-title{font-size:0.88rem;font-weight:700;margin-bottom:6px;line-height:1.4}
+    .article-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:0.72rem;color:var(--text-muted)}
+    .article-meta i{margin-right:2px}
+    .rel-badge{font-size:0.65rem;font-weight:700;padding:3px 8px;border-radius:6px;background:var(--green-bg);color:#065f46;border:1px solid #a7f3d0}
+
+    .ai-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+    .ai-field{background:var(--bg);border-radius:8px;padding:10px;border:1px solid var(--border)}
+    .ai-field-label{font-size:0.6rem;text-transform:uppercase;font-weight:700;color:var(--text-muted);letter-spacing:0.5px;margin-bottom:4px}
+    .ai-field-value{font-size:0.78rem;color:#475569;line-height:1.5}
+
+    .translation-box{margin-top:8px;padding:8px 12px;background:var(--blue-bg);border-left:3px solid var(--blue);border-radius:0 8px 8px 0;font-size:0.78rem;color:#475569;line-height:1.5}
+
+    .btn-primary{width:100%;padding:16px;border:none;border-radius:var(--radius);background:var(--primary);color:#fff;font-family:inherit;font-size:1rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:all 0.2s}
+    .btn-primary:hover{background:#0d5f58;transform:translateY(-1px);box-shadow:0 6px 20px rgba(15,118,110,0.3)}
+    .btn-primary:disabled{opacity:0.6;cursor:not-allowed;transform:none}
+
+    .modal{display:none;position:fixed;z-index:100;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.4);backdrop-filter:blur(4px)}
+    .modal-content{background:#fff;margin:8% auto;border-radius:16px;width:680px;max-width:92%;max-height:80vh;box-shadow:0 20px 50px rgba(0,0,0,0.15);display:flex;flex-direction:column;overflow:hidden}
+    .modal-header{background:var(--accent);padding:16px 20px;color:#fff;display:flex;justify-content:space-between;align-items:center}
+    .modal-header h3{font-size:0.95rem;font-weight:700;display:flex;align-items:center;gap:8px}
+    .modal-header p{font-size:0.7rem;color:rgba(255,255,255,0.8);margin-top:2px}
+    .modal-body{padding:16px 20px;overflow-y:auto;flex:1;background:var(--bg)}
+    .modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:#fafbfc}
+    .modal-footer button{padding:8px 18px;border-radius:8px;font-weight:700;font-size:0.8rem;cursor:pointer;font-family:inherit;border:none;transition:all 0.15s}
+
+    .missing-pdf-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .missing-pdf-item:hover{border-color:var(--blue)}
+    .status-badge{font-size:0.6rem;font-weight:800;padding:3px 6px;border-radius:4px;text-transform:uppercase}
+
+    @keyframes spin{to{transform:rotate(360deg)}} .fa-spin{animation:spin 1s linear infinite}
+    .hidden{display:none!important}
+    footer{background:var(--card);border-top:1px solid var(--border);padding:1.5rem 2rem;text-align:center;font-size:0.8rem;color:var(--text-muted)} footer strong{color:var(--primary)}
+    .footer-credits{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;margin-top:.6rem;font-size:.65rem}
+    .footer-credits a{color:var(--text-muted);text-decoration:none;transition:color .15s;font-weight:500} .footer-credits a:hover{color:var(--primary)}
+    .footer-credits .sep{color:#ddd} .footer-section-label{font-size:.55rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#cbd5e1;margin:0 4px}
+    @media(max-width:640px){.stats-row{grid-template-columns:1fr 1fr}.ai-fields{grid-template-columns:1fr}.nav-steps{display:none}.export-btns{flex-direction:column}}
   </style>
 </head>
-<body class="bg-gradient-to-br from-emerald-50 via-teal-50 to-indigo-50 min-h-screen">
+<body>
 
-  <!-- Hero -->
-  <div class="gradient-hero py-16 relative">
-    <div class="container mx-auto px-6 max-w-7xl text-center text-white">
-      <div class="inline-flex items-center justify-center w-24 h-24 bg-white/20 rounded-full mb-6 backdrop-blur-md">
-        <i class="fas fa-check-double text-5xl text-emerald-400"></i>
+  <nav class="navbar">
+    <a href="/" class="navbar-brand"><i class="fas fa-flask"></i> PRISMA Assistant</a>
+    <ul class="nav-steps">
+      <li class="nav-step done"><span class="sn">1</span> Búsqueda</li>
+      <li class="nav-step done"><span class="sn">2</span> Filtros</li>
+      <li class="nav-step done"><span class="sn">3</span> Screening</li>
+      <li class="nav-step active"><span class="sn">4</span> Revisión</li>
+    </ul>
+  </nav>
+
+  <div class="content">
+    <header class="page-header">
+      <h1>Revisión Final de Artículos</h1>
+      <p>Verifique los {{ total_included }} artículos seleccionados antes de generar la síntesis</p>
+    </header>
+
+    <div class="stats-row">
+      <div class="stat"><div class="n green">{{ total_included }}</div><div class="l">Incluidos</div></div>
+      <div class="stat"><div class="n red">{{ total_excluded }}</div><div class="l">Excluidos</div></div>
+      <div class="stat"><div class="n indigo">{{ avg_similarity }}%</div><div class="l">Relevancia Prom.</div></div>
+      <div class="stat"><div class="n purple">{{ unique_journals }}</div><div class="l">Revistas</div></div>
+    </div>
+
+    <!-- Exportar -->
+    <div class="section-card">
+      <div class="section-title"><i class="fas fa-download"></i> Exportar Referencias</div>
+      <div class="export-btns">
+        <button onclick="exportBibTeX()" class="export-btn"><i class="fas fa-file-code"></i> BibTeX</button>
+        <button onclick="exportCSV()" class="export-btn"><i class="fas fa-file-csv"></i> CSV</button>
+        <button onclick="exportRIS()" class="export-btn"><i class="fas fa-file-alt"></i> RIS</button>
+        <button onclick="downloadAllPDFs()" class="export-btn"><i class="fas fa-file-pdf"></i> PDFs (Beta)</button>
       </div>
-      <h1 class="text-5xl font-bold mb-4">
-        Revisión Final de Artículos
-      </h1>
-      <p class="text-xl text-white/90 max-w-3xl mx-auto">
-        Verifique los {{ total_included }} artículos seleccionados antes de generar la síntesis
-      </p>
+    </div>
+
+    <!-- Artículos -->
+    <div class="section-card">
+      <div class="section-title"><i class="fas fa-list-check"></i> Artículos Seleccionados ({{ total_included }})</div>
+      {% for article in included_articles %}
+      <div class="article-item">
+        <div class="article-title">
+          <a href="{{ article.url }}" target="_blank" style="text-decoration:none;color:var(--text)">
+            {{ loop.index }}. {{ article.title }} <i class="fas fa-external-link-alt" style="font-size:0.6rem;color:var(--primary);margin-left:4px"></i>
+          </a>
+        </div>
+        <div class="article-meta">
+          <span><i class="fas fa-users"></i> {{ (article.authors or [])[:2]|join(', ') }}{% if (article.authors or [])|length > 2 %} et al.{% endif %}</span>
+          <span>•</span>
+          <span><i class="fas fa-calendar"></i> {{ article.year }}</span>
+          {% if article.journal %}<span>•</span><span><i class="fas fa-book"></i> {{ article.journal }}</span>{% endif %}
+          <span class="rel-badge">{{ ((article.similarity | default(0)) * 100)|int }}%</span>
+        </div>
+
+        {% if article.translation %}
+        <div class="translation-box">
+          <strong style="color:var(--blue);font-size:0.65rem">[ES]</strong> {{ article.translation[:500] }}{{ '...' if article.translation|length > 500 else '' }}
+        </div>
+        {% endif %}
+
+        {% if article.summary or article.methodology or article.population %}
+        <div class="ai-fields">
+          {% if article.summary %}
+          <div class="ai-field"><div class="ai-field-label">📝 Resumen</div><div class="ai-field-value">{{ article.summary }}</div></div>
+          {% endif %}
+          {% if article.methodology %}
+          <div class="ai-field"><div class="ai-field-label">🔬 Metodología</div><div class="ai-field-value">{{ article.methodology }}</div></div>
+          {% endif %}
+          {% if article.population %}
+          <div class="ai-field"><div class="ai-field-label">👥 Población</div><div class="ai-field-value">{{ article.population }}</div></div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        {% if article.researcher_notes %}
+        <div style="margin-top:8px;padding:8px 12px;background:var(--amber-bg);border-left:3px solid var(--amber);border-radius:0 8px 8px 0;font-size:0.75rem;color:#92400e">
+          <i class="fas fa-sticky-note" style="margin-right:4px"></i> {{ article.researcher_notes }}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- CTA Síntesis -->
+    <div class="section-card" style="text-align:center;padding:2rem">
+      <h3 style="font-weight:800;font-size:1.1rem;margin-bottom:0.5rem"><i class="fas fa-rocket" style="color:var(--primary);margin-right:6px"></i> ¿Listo para Generar la Síntesis?</h3>
+      <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1.5rem">Se analizarán los {{ total_included }} artículos seleccionados para crear una síntesis narrativa completa.</p>
+      <button onclick="proceedToSynthesis()" class="btn-primary" style="max-width:400px;margin:0 auto">
+        <i class="fas fa-arrow-right"></i> Generar Síntesis Final
+      </button>
     </div>
   </div>
 
-  <div class="container mx-auto px-6 max-w-7xl -mt-12 relative z-10">
-
-    <!-- Resumen estadístico -->
-    <div class="glass rounded-2xl p-8 mb-10 shadow-xl">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div class="text-center">
-          <div class="text-4xl font-bold text-emerald-600">{{ total_included }}</div>
-          <div class="text-sm text-gray-600 mt-1">Artículos Incluidos</div>
+  <!-- Modal Verificación -->
+  <div id="verificationModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h3><i class="fas fa-microscope"></i> Verificación de Evidencia</h3>
+          <p>Algunos artículos no tienen texto completo disponible.</p>
         </div>
-        <div class="text-center">
-          <div class="text-4xl font-bold text-red-600">{{ total_excluded }}</div>
-          <div class="text-sm text-gray-600 mt-1">Artículos Excluidos</div>
-        </div>
-        <div class="text-center">
-          <div class="text-4xl font-bold text-indigo-600">{{ avg_similarity }}%</div>
-          <div class="text-sm text-gray-600 mt-1">Relevancia Promedio</div>
-        </div>
-        <div class="text-center">
-          <div class="text-4xl font-bold text-purple-600">{{ unique_journals }}</div>
-          <div class="text-sm text-gray-600 mt-1">Revistas Únicas</div>
-        </div>
+        <button onclick="closeVerificationModal()" style="background:none;border:none;color:rgba(255,255,255,0.8);cursor:pointer;font-size:1.1rem"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div id="missing-pdfs-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button onclick="closeVerificationModal()" style="background:none;color:var(--text-muted)">Cancelar</button>
+        <button onclick="finalProceed()" id="finalProceedBtn" style="background:var(--primary);color:#fff">Omitir y Generar Síntesis</button>
       </div>
     </div>
-
-    <!-- Acciones de Exportación -->
-    <div class="glass rounded-2xl p-6 mb-10 shadow-xl">
-      <h3 class="text-xl font-bold mb-4 flex items-center gap-2">
-        <i class="fas fa-download text-indigo-600"></i>
-        Exportar Referencias
-      </h3>
-      <div class="flex flex-wrap gap-4">
-        <button onclick="exportBibTeX()" class="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all">
-          <i class="fas fa-file-code mr-2"></i>
-          Exportar como BibTeX
-        </button>
-        <button onclick="exportCSV()" class="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all">
-          <i class="fas fa-file-csv mr-2"></i>
-          Exportar como CSV
-        </button>
-        <button onclick="exportRIS()" class="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-semibold hover:shadow-lg transition-all">
-          <i class="fas fa-file-alt mr-2"></i>
-          Exportar como RIS
-        </button>
-        <button onclick="downloadAllPDFs()" class="px-6 py-3 bg-gradient-to-r from-gray-700 to-gray-900 text-white rounded-xl font-semibold hover:shadow-lg transition-all">
-            <i class="fas fa-file-pdf mr-2"></i>
-            Descargar PDFs (Beta)
-        </button>
-      </div>
-    </div>
-
-    <!-- Lista de artículos incluidos -->
-    <div class="mb-10">
-      <h3 class="text-2xl font-bold mb-6 text-gray-800">
-        <i class="fas fa-list-check mr-2 text-emerald-600"></i>
-        Artículos Seleccionados ({{ total_included }})
-      </h3>
-      
-      <div class="space-y-6">
-        {% for article in included_articles %}
-        <div class="article-card glass rounded-2xl p-6 shadow-lg">
-          <div class="flex items-start justify-between mb-4">
-            <div class="flex-1">
-              <h4 class="text-xl font-bold text-gray-800 mb-2">
-                {{ loop.index }}. {{ article.title }}
-              </h4>
-              <div class="flex flex-wrap gap-3 text-sm text-gray-600 mb-3">
-                <span><i class="fas fa-users"></i> {{ (article.authors or [])[:3]|join(', ') }}{% if (article.authors or [])|length > 3 %} et al.{% endif %}</span>
-                <span>•</span>
-                <span><i class="fas fa-calendar"></i> {{ article.year }}</span>
-                <span>•</span>
-                <span><i class="fas fa-book"></i> {{ article.journal or 'Sin revista' }}</span>
-                {% if article.volume %}<span>• Vol: {{ article.volume }}</span>{% endif %}
-              </div>
-            </div>
-            <div class="flex-shrink-0 ml-4">
-              <div class="text-center p-3 bg-emerald-100 rounded-xl">
-                <div class="text-2xl font-bold text-emerald-700">{{ (article.similarity * 100)|int }}%</div>
-                <div class="text-xs text-gray-600">Relevancia</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Abstract traducido -->
-          {% if article.translation %}
-          <div class="mb-4 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500">
-            <div class="font-semibold text-sm text-gray-700 mb-2">
-              <i class="fas fa-language text-blue-600"></i> Abstract (Español)
-            </div>
-            <p class="text-sm text-gray-700 leading-relaxed">{{ article.translation[:500] }}{{ '...' if article.translation|length > 500 else '' }}</p>
-          </div>
-          {% endif %}
-
-          <!-- Campos generados por IA -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {% if article.summary %}
-            <div class="p-3 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg border border-indigo-200">
-              <div class="font-semibold text-xs text-indigo-700 mb-2 uppercase">📝 Summary</div>
-              <p class="text-sm text-gray-700">{{ article.summary }}</p>
-            </div>
-            {% endif %}
-
-            {% if article.methodology %}
-            <div class="p-3 bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg border border-purple-200">
-              <div class="font-semibold text-xs text-purple-700 mb-2 uppercase">🔬 Methodology</div>
-              <p class="text-sm text-gray-700">{{ article.methodology }}</p>
-            </div>
-            {% endif %}
-
-            {% if article.population %}
-            <div class="p-3 bg-gradient-to-br from-teal-50 to-emerald-50 rounded-lg border border-teal-200">
-              <div class="font-semibold text-xs text-teal-700 mb-2 uppercase">👥 Population</div>
-              <p class="text-sm text-gray-700">{{ article.population }}</p>
-            </div>
-            {% endif %}
-          </div>
-
-          <!-- Notas del investigador -->
-          {% if article.researcher_notes %}
-          <div class="mt-4 p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
-            <div class="font-semibold text-sm text-yellow-800 mb-1">
-              <i class="fas fa-sticky-note"></i> Notas del Investigador
-            </div>
-            <p class="text-sm text-gray-700">{{ article.researcher_notes }}</p>
-          </div>
-          {% endif %}
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-
-    <!-- Botón para continuar a síntesis -->
-    <div class="glass rounded-2xl p-8 mb-10 shadow-xl text-center">
-      <div class="max-w-2xl mx-auto">
-        <h3 class="text-2xl font-bold text-gray-800 mb-4">
-          <i class="fas fa-rocket text-indigo-600 mr-2"></i>
-          ¿Listo para Generar la Síntesis?
-        </h3>
-        <p class="text-gray-600 mb-6">
-          Se analizarán los {{ total_included }} artículos seleccionados para crear una síntesis narrativa completa basada en evidencia.
-        </p>
-        <button onclick="proceedToSynthesis()" 
-                class="px-10 py-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-xl font-bold text-lg hover:shadow-2xl transition-all">
-          <i class="fas fa-arrow-right mr-2"></i>
-          Generar Síntesis Final
-        </button>
-      </div>
-    </div>
-
   </div>
 
-  <footer class="bg-gradient-to-r from-gray-900 to-gray-800 text-white py-8 mt-20">
-    <div class="container mx-auto px-6 text-center">
-      <p class="text-lg font-semibold">
-        © 2025 <span class="text-emerald-400">Universidad Privada Antenor Orrego</span>
-      </p>
+  <footer>
+    <div>© 2025 <strong>Universidad Privada Antenor Orrego</strong></div>
+    <div class="footer-credits">
+      <span class="footer-section-label">Datos</span>
+      <a href="https://www.semanticscholar.org/" target="_blank">Semantic Scholar</a><span class="sep">·</span>
+      <a href="https://openalex.org/" target="_blank">OpenAlex</a><span class="sep">·</span>
+      <a href="https://europepmc.org/" target="_blank">Europe PMC</a><span class="sep">·</span>
+      <a href="https://unpaywall.org/" target="_blank">Unpaywall</a><span class="sep">|</span>
+      <span class="footer-section-label">IA</span>
+      <a href="https://ai.google.dev/" target="_blank">Google Gemini</a><span class="sep">·</span>
+      <a href="https://openrouter.ai/" target="_blank">OpenRouter</a><span class="sep">·</span>
+      <a href="https://groq.com/" target="_blank">Groq</a><span class="sep">·</span>
+      <a href="https://cerebras.ai/" target="_blank">Cerebras</a><span class="sep">|</span>
+      <span class="footer-section-label">Infra</span>
+      <a href="https://www.trychroma.com/" target="_blank">ChromaDB</a><span class="sep">·</span>
+      <a href="https://fastapi.tiangolo.com/" target="_blank">FastAPI</a>
     </div>
   </footer>
 
+  <!-- DATA -->
+  <script id="included-articles-data" type="application/json">
+{{ included_articles | tojson | safe }}
+  </script>
+
   <script>
-    // Recuperamos TODOS los datos que envió Python
-    const articles = {{ included_articles | tojson | safe }};
+    const dataElement = document.getElementById('included-articles-data');
+    const articles = dataElement ? JSON.parse(dataElement.textContent.trim()) : [];
     const sessionId = "{{ session_id }}";
     const question = "{{ question }}";
 
-    // ---------------------------------------------------------
-    //  FUNCIÓN CORREGIDA: Ahora escribe TODOS los datos
-    // ---------------------------------------------------------
     function exportBibTeX() {
-        let bibtex = '';
-        
-        articles.forEach((article, idx) => {
-            const key = generateBibKey(article);
-            
-            bibtex += `@article{${key},\n`;
-            bibtex += `  title={${escapeBibtex(article.title)}},\n`;
-            
-            // Autores en formato BibTeX
-            if (article.authors && article.authors.length > 0) {
-                const authorStr = article.authors.join(' and ');
-                bibtex += `  author={${escapeBibtex(authorStr)}},\n`;
-            }
-            
-            bibtex += `  journal={${escapeBibtex(article.journal || 'Unknown')}},\n`;
-            bibtex += `  year={${article.year || 'n.d.'}},\n`;
-            
-            // --- NUEVAS LÍNEAS AÑADIDAS PARA QUE APAREZCAN EN ZOTERO ---
-            if (article.volume) {
-                bibtex += `  volume={${escapeBibtex(article.volume)}},\n`;
-            }
-            if (article.issue) {
-                bibtex += `  number={${escapeBibtex(article.issue)}},\n`;
-            }
-            if (article.pages) {
-                bibtex += `  pages={${escapeBibtex(article.pages)}},\n`;
-            }
-            if (article.issn) {
-                bibtex += `  issn={${escapeBibtex(article.issn)}},\n`;
-            }
-            if (article.journal_short) {
-                bibtex += `  shortjournal={${escapeBibtex(article.journal_short)}},\n`;
-            }
-            // -----------------------------------------------------------
-
-            if (article.doi) {
-                bibtex += `  doi={${article.doi}},\n`;
-            }
-            
-            if (article.abstract) {
-                bibtex += `  abstract={${escapeBibtex(article.abstract.substring(0, 800))}...},\n`;
-            }
-            
-            if (article.url) {
-                bibtex += `  url={${article.url}},\n`;
-            }
-            
-            // Enlace al PDF
-            const pdfUrl = article.url || (article.doi ? `https://doi.org/${article.doi}` : '');
-            if (pdfUrl) {
-                const filename = `${key}.pdf`;
-                bibtex += `  file={${filename}:${pdfUrl}:application/pdf},\n`;
-            }
-            
-            // Notas
-            if (article.researcher_notes) {
-                bibtex += `  note={${escapeBibtex(article.researcher_notes)}},\n`;
-            }
-            
-            bibtex += `}\n\n`;
-        });
-        
-        downloadFile(bibtex, 'references.bib', 'text/plain');
-        
-        // Mensaje de éxito
-        alert(`✅ BibTeX exportado!\nSe han incluido Volúmenes, Números y Páginas.`);
+      let bibtex = '';
+      articles.forEach(article => {
+        if (article.bibtex && article.bibtex.trim()) { bibtex += article.bibtex.trim() + '\n\n'; }
+        else {
+          const key = generateBibKey(article);
+          const authorStr = (article.authors || []).join(' and ');
+          const fields = [`  title     = {${escapeBibtex(article.title || '')}}`,`  author    = {${escapeBibtex(authorStr)}}`,`  year      = {${article.year || 'n.d.'}}`];
+          if (article.journal) fields.push(`  journal   = {${escapeBibtex(article.journal)}}`);
+          if (article.volume) fields.push(`  volume    = {${escapeBibtex(article.volume)}}`);
+          if (article.issue) fields.push(`  number    = {${escapeBibtex(article.issue)}}`);
+          if (article.pages) fields.push(`  pages     = {${escapeBibtex(article.pages)}}`);
+          if (article.doi) fields.push(`  doi       = {${article.doi}}`);
+          if (article.url) fields.push(`  url       = {${article.url}}`);
+          bibtex += `@article{${key},\n${fields.join(',\n')}\n}\n\n`;
+        }
+      });
+      downloadFile(bibtex, 'referencias.bib', 'text/plain;charset=utf-8');
+      alert(`✅ BibTeX exportado — ${articles.length} referencias`);
     }
 
     function exportCSV() {
-        // Añadimos también las columnas nuevas al encabezado del CSV
-        let csv = 'Title,Authors,Year,Journal,Volume,Issue,Pages,DOI,Relevance,URL,PDF_Link,Notes,Summary,Methodology,Population,Key_Findings,Limitations,Conclusions\n';
-        
-        articles.forEach(article => {
-            const pdfLink = article.url || (article.doi ? `https://doi.org/${article.doi}` : '');
-            
-            const row = [
-                escapeCSV(article.title),
-                escapeCSV((article.authors || []).join('; ')),
-                article.year,
-                escapeCSV(article.journal || ''),
-                escapeCSV(article.volume || ''), // Nuevo
-                escapeCSV(article.issue || ''),  // Nuevo
-                escapeCSV(article.pages || ''),  // Nuevo
-                article.doi || '',
-                `${(article.similarity * 100).toFixed(1)}%`,
-                article.url || '',
-                pdfLink,
-                escapeCSV(article.researcher_notes || ''),
-                escapeCSV(article.summary || ''),
-                escapeCSV(article.methodology || ''),
-                escapeCSV(article.population || ''),
-                escapeCSV(article.key_findings || ''),
-                escapeCSV(article.limitations || ''),
-                escapeCSV(article.conclusions || '')
-            ].join(',');
-            
-            csv += row + '\n';
-        });
-        
-        downloadFile(csv, 'references_full.csv', 'text/csv');
-        alert('✅ CSV exportado con datos bibliográficos completos');
+      let csv = 'Title,Authors,Year,Journal,Volume,Issue,Pages,DOI,Relevance,URL,PDF_Link,Notes,Summary,Methodology,Population,Key_Findings,Limitations,Conclusions\n';
+      articles.forEach(article => {
+        const pdfLink = article.url || (article.doi ? `https://doi.org/${article.doi}` : '');
+        csv += [escapeCSV(article.title),escapeCSV((article.authors||[]).join('; ')),article.year,escapeCSV(article.journal||''),escapeCSV(article.volume||''),escapeCSV(article.issue||''),escapeCSV(article.pages||''),article.doi||'',`${(article.similarity*100).toFixed(1)}%`,article.url||'',pdfLink,escapeCSV(article.researcher_notes||''),escapeCSV(article.summary||''),escapeCSV(article.methodology||''),escapeCSV(article.population||''),escapeCSV(article.key_findings||''),escapeCSV(article.limitations||''),escapeCSV(article.conclusions||'')].join(',') + '\n';
+      });
+      downloadFile(csv, 'references_full.csv', 'text/csv');
+      alert('✅ CSV exportado');
     }
 
     function exportRIS() {
-        let ris = '';
-        
-        articles.forEach(article => {
-            ris += 'TY  - JOUR\n';
-            ris += `TI  - ${article.title}\n`;
-            
-            (article.authors || []).forEach(author => {
-                ris += `AU  - ${author}\n`;
-            });
-            
-            ris += `PY  - ${article.year}\n`;
-            ris += `JO  - ${article.journal || 'Unknown'}\n`;
-            
-            // --- NUEVOS CAMPOS RIS ---
-            if (article.volume) ris += `VL  - ${article.volume}\n`;
-            if (article.issue)  ris += `IS  - ${article.issue}\n`;
-            if (article.pages) {
-                // RIS prefiere SP (Start Page) y EP (End Page), pero a veces solo tenemos el rango
-                ris += `SP  - ${article.pages}\n`; 
-            }
-            if (article.issn)   ris += `SN  - ${article.issn}\n`;
-            // -------------------------
-
-            if (article.doi) {
-                ris += `DO  - ${article.doi}\n`;
-            }
-            
-            if (article.abstract) {
-                ris += `AB  - ${article.abstract}\n`;
-            }
-            
-            if (article.url) {
-                ris += `UR  - ${article.url}\n`;
-            }
-            
-            const pdfUrl = article.url || (article.doi ? `https://doi.org/${article.doi}` : '');
-            if (pdfUrl) {
-                ris += `L1  - ${pdfUrl}\n`;
-            }
-            
-            if (article.researcher_notes) {
-                ris += `N1  - ${article.researcher_notes}\n`;
-            }
-            
-            ris += 'ER  - \n\n';
-        });
-        
-        downloadFile(ris, 'references.ris', 'application/x-research-info-systems');
-        alert('✅ RIS exportado correctamente');
+      let ris = '';
+      articles.forEach(article => {
+        ris += 'TY  - JOUR\n';
+        ris += `TI  - ${article.title}\n`;
+        (article.authors||[]).forEach(a => { ris += `AU  - ${a}\n`; });
+        ris += `PY  - ${article.year}\n`;
+        ris += `JO  - ${article.journal||'Unknown'}\n`;
+        if (article.volume) ris += `VL  - ${article.volume}\n`;
+        if (article.issue) ris += `IS  - ${article.issue}\n`;
+        if (article.pages) ris += `SP  - ${article.pages}\n`;
+        if (article.issn) ris += `SN  - ${article.issn}\n`;
+        if (article.doi) ris += `DO  - ${article.doi}\n`;
+        if (article.abstract) ris += `AB  - ${article.abstract}\n`;
+        if (article.url) ris += `UR  - ${article.url}\n`;
+        const pdfUrl = article.url||(article.doi?`https://doi.org/${article.doi}`:'');
+        if (pdfUrl) ris += `L1  - ${pdfUrl}\n`;
+        if (article.researcher_notes) ris += `N1  - ${article.researcher_notes}\n`;
+        ris += 'ER  - \n\n';
+      });
+      downloadFile(ris, 'references.ris', 'application/x-research-info-systems');
+      alert('✅ RIS exportado');
     }
 
-    // ===================================================================
-    // FUNCIONES AUXILIARES
-    // ===================================================================
-
-    function generateBibKey(article) {
-        let key = '';
-        // Primer autor
-        if (article.authors && article.authors.length > 0) {
-            const firstAuthor = article.authors[0].split(' ');
-            const lastName = firstAuthor[firstAuthor.length - 1];
-            key += lastName.replace(/[^a-zA-Z]/g, '');
-        } else {
-            key += 'Unknown';
-        }
-        
-        // Año
-        key += article.year || '0000';
-        
-        // Primera palabra del título
-        if (article.title) {
-            const firstWord = article.title.split(' ')[0].replace(/[^a-zA-Z]/g, '');
-            if (firstWord) {
-                key += '_' + firstWord;
-            }
-        }
-        return key;
+    function generateBibKey(a) {
+      let k = '';
+      if (a.authors?.length) { const p = a.authors[0].split(' '); k += p[p.length-1].replace(/[^a-zA-Z]/g,''); } else k += 'Unknown';
+      k += a.year || '0000';
+      if (a.title) { const w = a.title.split(' ')[0].replace(/[^a-zA-Z]/g,''); if (w) k += '_'+w; }
+      return k;
     }
-
-    function escapeBibtex(text) {
-        if (!text) return '';
-        return text
-            .replace(/\\/g, '\\\\')
-            .replace(/{/g, '\\{')
-            .replace(/}/g, '\\}')
-            .replace(/~/g, '\\~{}')
-            .replace(/\^/g, '\\^{}')
-            .replace(/#/g, '\\#')
-            .replace(/&/g, '\\&')
-            .replace(/_/g, '\\_')
-            .replace(/%/g, '\\%')
-            .replace(/\$/g, '\\$');
-    }
-
-    function escapeCSV(text) {
-        if (!text) return '""';
-        text = String(text);
-        if (text.includes('"')) {
-            text = text.replace(/"/g, '""');
-        }
-        if (text.includes(',') || text.includes('"') || text.includes('\n')) {
-            text = `"${text}"`;
-        }
-        return text;
-    }
-
-    function downloadFile(content, filename, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
+    function escapeBibtex(t) { return t ? t.replace(/\\/g,'\\\\').replace(/{/g,'\\{').replace(/}/g,'\\}').replace(/~/g,'\\~{}').replace(/\^/g,'\\^{}').replace(/#/g,'\\#').replace(/&/g,'\\&').replace(/_/g,'\\_').replace(/%/g,'\\%').replace(/\$/g,'\\$') : ''; }
+    function escapeCSV(t) { if (!t) return '""'; t = String(t); if (t.includes('"')) t = t.replace(/"/g,'""'); if (t.includes(',')||t.includes('"')||t.includes('\n')) t = `"${t}"`; return t; }
+    function downloadFile(c,f,m) { const b=new Blob([c],{type:m}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download=f; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(u); }
 
     async function proceedToSynthesis() {
-      const btn = event.target;
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Generando Síntesis...';
-      
+      const missing = articles.filter(a => !a.is_pdf_downloaded);
+      if (missing.length > 0) { showVerificationModal(missing); return; }
+      await finalProceed();
+    }
+
+    function showVerificationModal(missing) {
+      const list = document.getElementById('missing-pdfs-list');
+      list.innerHTML = '';
+      missing.forEach(art => {
+        const index = articles.indexOf(art);
+        const url = art.url || (art.doi ? `https://doi.org/${art.doi}` : '');
+        const item = document.createElement('div');
+        item.className = 'missing-pdf-item'; item.id = `missing-item-${index}`;
+        item.innerHTML = `
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:0.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${art.title}">${art.title}</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+              <span style="font-size:0.6rem;background:var(--red-bg);color:var(--red);padding:2px 6px;border-radius:4px;font-weight:800;text-transform:uppercase">Sin PDF</span>
+              <a href="${url}" target="_blank" style="font-size:0.7rem;color:var(--blue);text-decoration:none"><i class="fas fa-external-link-alt"></i> Fuente</a>
+            </div>
+          </div>
+          <div>
+            <input type="file" id="file-${index}" style="display:none" accept="application/pdf" onchange="uploadMissingPDF(${index})">
+            <button onclick="document.getElementById('file-${index}').click()" id="btn-upload-${index}" class="export-btn" style="padding:6px 12px;font-size:0.7rem"><i class="fas fa-upload"></i> Subir</button>
+          </div>`;
+        list.appendChild(item);
+      });
+      document.getElementById('verificationModal').style.display = 'block';
+    }
+
+    function closeVerificationModal() {
+      document.getElementById('verificationModal').style.display = 'none';
+      const btn = document.querySelector('button[onclick="proceedToSynthesis()"]');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-arrow-right"></i> Generar Síntesis Final'; }
+    }
+
+    async function uploadMissingPDF(index) {
+      const fi = document.getElementById(`file-${index}`);
+      const btn = document.getElementById(`btn-upload-${index}`);
+      const item = document.getElementById(`missing-item-${index}`);
+      if (!fi.files?.length) return;
+      const fd = new FormData();
+      fd.append('file', fi.files[0]); fd.append('sessionId', sessionId); fd.append('articleIndex', articles[index].original_index || index);
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
       try {
-        const response = await fetch('/generate_synthesis', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            sessionId: sessionId,
-            question: question,
-            articles: articles
-          })
-        });
-        
-        if (response.ok) {
-          const html = await response.text();
-          document.open();
-          document.write(html);
-          document.close();
-        } else {
-          alert('Error al generar síntesis');
-          btn.disabled = false;
-          btn.innerHTML = '<i class="fas fa-arrow-right mr-2"></i> Generar Síntesis Final';
-        }
-      } catch (error) {
-        console.error('Error:', error);
-        alert('Error de conexión');
-        btn.disabled = false;
-      }
+        const res = await fetch('/upload_pdf', { method: 'POST', body: fd });
+        if (res.ok) {
+          articles[index].is_pdf_downloaded = true;
+          item.style.background = 'var(--green-bg)'; item.style.borderColor = '#a7f3d0';
+          item.innerHTML = `<div style="flex:1"><div style="font-weight:700;font-size:0.8rem;color:#065f46">${articles[index].title}</div><div style="font-size:0.6rem;color:#065f46;font-weight:700;margin-top:4px"><i class="fas fa-check-circle"></i> PROCESADO</div></div><div style="color:var(--green);font-size:1.2rem"><i class="fas fa-check-circle"></i></div>`;
+          if (!articles.some(a => !a.is_pdf_downloaded)) { setTimeout(() => { alert("¡Todos los PDFs listos!"); finalProceed(); }, 800); }
+        } else { alert('Error al subir'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-upload"></i> Reintentar'; }
+      } catch (e) { alert('Error: ' + e.message); btn.disabled = false; }
+    }
+
+    async function finalProceed() {
+      closeVerificationModal();
+      const mainBtn = document.querySelector('button[onclick="proceedToSynthesis()"]');
+      const modalBtn = document.getElementById('finalProceedBtn');
+      const set = v => {
+        if (mainBtn) { mainBtn.disabled = v; mainBtn.innerHTML = v ? '<i class="fas fa-spinner fa-spin"></i> Generando...' : '<i class="fas fa-arrow-right"></i> Generar Síntesis Final'; }
+        if (modalBtn) { modalBtn.disabled = v; modalBtn.innerHTML = v ? 'Generando...' : 'Omitir y Generar'; }
+      };
+      set(true);
+      try {
+        const res = await fetch('/generate_synthesis', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({sessionId,question,articles}) });
+        if (res.ok) { const h = await res.text(); document.open(); document.write(h); document.close(); }
+        else { try { const e = await res.json(); alert('Error: '+(e.detail||'Fallo')); } catch(e) { alert('Error al generar'); } set(false); }
+      } catch (e) { alert('Error: '+e.message); set(false); }
     }
 
     async function downloadAllPDFs() {
-        if (!confirm(`Esta función intentará descargar ${articles.length} PDFs.\n\n⚠️ ADVERTENCIA:\n- Solo funciona con artículos Open Access\n- Puede tardar varios minutos\n- Algunos PDFs pueden no estar disponibles\n\n¿Continuar?`)) {
-            return;
-        }
-        
-        const btn = event.target;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Descargando PDFs...';
-        
-        let successCount = 0;
-        let failCount = 0;
-        
-        for (let i = 0; i < articles.length; i++) {
-            const article = articles[i];
-            
-            try {
-                // Intentar obtener PDF desde Unpaywall API
-                const doi = article.doi;
-                if (!doi) {
-                    failCount++;
-                    continue;
-                }
-                
-                const unpaywallUrl = `https://api.unpaywall.org/v2/${doi}?email=prisma-assistant@upao.edu.pe`;
-                const response = await fetch(unpaywallUrl);
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    
-                    if (data.best_oa_location && data.best_oa_location.url_for_pdf) {
-                        const pdfUrl = data.best_oa_location.url_for_pdf;
-                        
-                        // Descargar PDF
-                        const pdfResponse = await fetch(pdfUrl);
-                        const pdfBlob = await pdfResponse.blob();
-                        
-                        // Guardar archivo
-                        const filename = `${generateBibKey(article)}.pdf`;
-                        downloadFile(pdfBlob, filename, 'application/pdf');
-                        
-                        successCount++;
-                        
-                        // Esperar 1 segundo entre descargas
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-                    } else {
-                        failCount++;
-                    }
-                } else {
-                    failCount++;
-                }
-            } catch (error) {
-                console.error(`Error descargando PDF de "${article.title}":`, error);
-                failCount++;
-            }
-            
-            // Actualizar progreso
-            btn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i> Descargando... (${i + 1}/${articles.length})`;
-        }
-        
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-file-pdf mr-2"></i> Descargar PDFs (Beta)';
-        
-        alert(`✅ Descarga completada!\n\n- PDFs descargados: ${successCount}\n- No disponibles: ${failCount}`);
+      if (!confirm(`Descargando ${articles.length} PDFs. Solo Open Access. ¿Continuar?`)) return;
+      const btn = event.target; btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Descargando...';
+      let ok = 0, fail = 0;
+      for (let i = 0; i < articles.length; i++) {
+        try {
+          const doi = articles[i].doi; if (!doi) { fail++; continue; }
+          const r = await fetch(`https://api.unpaywall.org/v2/${doi}?email=prisma-assistant@upao.edu.pe`);
+          if (r.ok) { const d = await r.json(); if (d.best_oa_location?.url_for_pdf) { const p = await fetch(d.best_oa_location.url_for_pdf); downloadFile(await p.blob(), `${generateBibKey(articles[i])}.pdf`, 'application/pdf'); ok++; await new Promise(r => setTimeout(r, 1000)); } else fail++; } else fail++;
+        } catch (e) { fail++; }
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${i+1}/${articles.length}`;
+      }
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-file-pdf"></i> PDFs (Beta)';
+      alert(`✅ Descargados: ${ok} | No disponibles: ${fail}`);
     }
   </script>
-
 </body>
 </html>

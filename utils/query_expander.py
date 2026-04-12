@@ -1,7 +1,7 @@
 """
-Query Expander - VERSIÓN ESTRATÉGICA (MULTI-QUERY)
-PROBLEMA ANTERIOR: Generaba palabras sueltas que creaban búsquedas demasiado amplias/genéricas.
-SOLUCIÓN: Genera 3-4 Ecuaciones Booleanas completas (Queries) listas para usar.
+Query Expander - VERSIÓN MULTI-PROVIDER + AGNÓSTICO AL DOMINIO
+Genera ecuaciones booleanas EN INGLÉS basadas en los conceptos de la pregunta.
+Si el LLM falla, extrae términos técnicos y genera queries en inglés.
 """
 import requests
 import config
@@ -17,8 +17,8 @@ CACHE_DIR = ".cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 def get_cache_key(question: str) -> str:
-    # v3: Invalida caches anteriores para forzar la nueva lógica booleana
-    key = f"grok_v3_boolean_{question.strip().lower()}"
+    # v6: Queries semánticas cortas (no booleanas pesadas)
+    key = f"semantic_v6_{question.strip().lower()}"
     return hashlib.md5(key.encode()).hexdigest()
 
 def load_from_cache(question: str) -> Optional[List[str]]:
@@ -37,113 +37,445 @@ def save_to_cache(question: str, terms: List[str]):
             json.dump({"question": question, "terms": terms}, f)
     except: pass
 
-def expand_query_with_grok(question: str, max_terms: int = 5) -> List[str]:
-    """
-    Usa Grok-3 para generar ECUACIONES DE BÚSQUEDA (Boolean Queries) en lugar de palabras sueltas.
-    """
-    # 1. Cache
+
+# ============================================================
+# PROMPT AGNÓSTICO (compartido entre providers)
+# ============================================================
+
+def _build_prompt(question: str) -> str:
+    return f"""Act as an expert systematic review librarian. Create 4-6 SHORT SEMANTIC SEARCH QUERIES IN ENGLISH for finding highly relevant academic papers.
+
+Research Question: "{question}"
+
+STRATEGY:
+- Query 1-2: Very specific (3-5 key terms, directly matching the research question)
+- Query 3-4: Moderately specific (combine main concepts with alternative terms)
+- Query 5-6: Broader but still focused (wider synonyms, but keep the core topic)
+
+CRITICAL RULES:
+1. Output ONLY valid JSON: {{"queries": ["query1", "query2", ...]}}
+2. ALL queries MUST be in ENGLISH
+3. DO NOT use boolean operators (AND, OR, NOT) — just write natural keyword phrases
+4. Each query should be 3-7 words of specific technical terms
+5. Focus on the EXACT topic, not broad categories
+6. Include specific tools, methods, or technologies mentioned in the question
+7. Include acronyms where appropriate (LLM, SAST, CNN, etc.)
+
+EXAMPLES:
+- CS/Security question → ["LLM vulnerability detection source code", "large language model static analysis security", "GPT code vulnerability SAST comparison", "AI code review false positive reduction"]
+- Health/AI question → ["deep learning cardiovascular diagnosis", "CNN heart disease detection ECG", "machine learning cardiac risk prediction"]
+
+JSON Output:"""
+
+def _build_api_prompt(question: str) -> str:
+    return f"""You are a systematic review librarian specialized in academic search engineering.
+
+Research Question: "{question}"
+
+STRATEGY: Generate 6 SHORT search queries (5-7 words each) covering these key perspectives:
+1. THE METHODS: Core tools or techniques mentioned (e.g., "LLM vulnerability detection").
+2. THE PROBLEM (PURE): The specific issue WITHOUT mentioning the new method (e.g., "static analysis false positives reduction"). This is critical to find baseline papers.
+3. THE OUTCOME: The measured improvement or target metric (e.g., "alert noise reduction").
+4. ALTERNATIVES: Synonyms or related technical concepts (e.g., "AI code audit security").
+
+RULES:
+- Each query MUST combine at least 2 concepts (e.g., Method + Problem).
+- Output ONLY valid JSON: {{"queries": ["query1", "query2", ...]}}
+- ALL queries MUST be in ENGLISH.
+- NO boolean operators, no quotes, plain text only.
+
+JSON Output:"""
+
+
+def _build_system_msg() -> str:
+    return "You are a search query generator for systematic reviews. ALL queries MUST be in ENGLISH. Extract concepts from the user's question, translate if needed, and create boolean queries. Output valid JSON only."
+
+
+# ============================================================
+# MULTI-PROVIDER QUERY GENERATION
+# ============================================================
+
+def expand_query_with_llm(question: str) -> List[str]:
+    """Queries largas para screening/embedding."""
     cached = load_from_cache(question)
-    if cached: 
-        logging.info(f"🤖 Queries booleanos desde cache (v3)")
-        return cached
+    if cached: return cached
 
-    # 2. Prompt ESTRATÉGICO (Multi-Query Strategy)
-    prompt = f"""Act as an expert systematic review librarian. Create 3 distinct and highly specific BOOLEAN SEARCH QUERIES for PubMed/Semantic Scholar based on this research question.
+    prompt = _build_prompt(question)
+    system_msg = _build_system_msg()
 
-    Question: "{question}"
+    # Fallback chain
+    for try_func in [_try_github_models, _try_groq, _try_huggingface]:
+        queries = try_func(prompt, system_msg)
+        if queries:
+            save_to_cache(question, queries)
+            return queries
 
-    STRATEGY:
-    Query 1 (Specific Algorithms): Focus on specific AI methods (Deep Learning, CNN, XGBoost) AND the specific disease AND diagnosis.
-    Query 2 (Biomarkers/Tools): Focus on AI AND diagnostic tools (ECG, MRI, Troponin) AND the condition.
-    Query 3 (Effectiveness): Focus on performance metrics (AUC, Sensitivity) AND AI AND the condition.
+    return generate_fallback_queries(question)
 
-    RULES:
-    1. Output ONLY a valid JSON object with a key "queries" containing a list of strings.
-    2. Use proper boolean operators (AND, OR). Use parentheses for grouping synonyms.
-    3. DO NOT use terms that are too broad like just "AI" or just "Disease" without specific qualifiers.
-    4. Example format: ["(Deep Learning OR CNN) AND (Atrial Fibrillation) AND (Early Detection)", "..."]
+def get_exclusion_terms_with_llm(question: str) -> List[str]:
+    """Identifica temas que suelen causar ruido para esta RQ específica (v7.8)."""
+    prompt = f"""Identify 6-8 SHORT terms or topics (1-2 words max) that are SEMANTIC DISTRACTORS for this research question.
+A distractor is a topic that shares keywords (LLM, Security, etc.) but has a completely DIFFERENT GOAL.
 
-    JSON Output:"""
+Research Question: "{question}"
 
+Examples of GOOD (Short) noise terms:
+- "watermarking" (if the goal is code audit)
+- "jailbreak" (if the goal is vulnerability detection)
+- "healthcare" (if the goal is software engineering)
+- "plagiarism" (if the goal is code generation)
+
+Output ONLY valid JSON: {{"exclusions": ["term1", "term2", ... ]}}
+Terms MUST be 1-2 words only for strict keyword matching."""
+    
+    system_msg = "You are a research filter specialist. Identify out-of-context noise terms."
+    
+    # Intento rápido con Groq o GitHub (fallback liviano)
+    for try_func in [_try_groq, _try_github_models]:
+        res = try_func(prompt, system_msg)
+        if res: return res # Reutilizamos _parse_llm_response que ahora busca "exclusions"
+        
+    return ["clinical", "patient", "medical"] # Fallback mínimo universal
+
+def generate_api_queries_with_llm(question: str) -> List[str]:
+    """Queries CORTAS de alta intersección para APIs (Recall)."""
+    # Cache distinguible por prefijo en get_cache_key (v7 for multi-perspective)
+    # v7.8: Fresh cache after physical cleanup
+    cache_key = hashlib.md5(f"api_v7_8_{question.strip().lower()}".encode()).hexdigest()
+    cache_path = os.path.join(CACHE_DIR, f"{cache_key}.json")
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, 'r', encoding='utf-8') as f:
+                return json.load(f)["queries"]
+        except: pass
+
+    prompt = _build_api_prompt(question)
+    system_msg = _build_system_msg()
+
+    # Fallback chain
+    for try_func in [_try_github_models, _try_groq, _try_huggingface]:
+        queries = try_func(prompt, system_msg)
+        if queries:
+            try:
+                with open(cache_path, 'w', encoding='utf-8') as f:
+                    json.dump({"question": question, "queries": queries}, f)
+            except: pass
+            return queries
+
+    return generate_fallback_queries(question)
+
+
+def _parse_llm_response(content: str) -> List[str]:
+    """Parsea la respuesta JSON del LLM y extrae queries."""
     try:
-        headers = {
-            "Authorization": f"Bearer {config.GITHUB_MODELS_TOKEN}",
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "model": config.PROMPT_GENERATION_MODEL,
-            "messages": [
-                {"role": "system", "content": "You are a search query generator. Output valid JSON only."},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.4, # Balanceado para precisión sintáctica pero variedad semántica
-            "max_tokens": 500,
-            "response_format": { "type": "json_object" }
-        }
+        data = json.loads(content)
+        # Buscar en queries o exclusions
+        queries = data.get("queries", data.get("exclusions", []))
+        clean = [q for q in queries if q and len(q) > 2]
+        if clean:
+            return clean
+    except json.JSONDecodeError:
+        # Intentar extraer JSON de la respuesta
+        match = re.search(r'\{.*\}', content, re.DOTALL)
+        if match:
+            try:
+                data = json.loads(match.group())
+                queries = data.get("queries", [])
+                return [q for q in queries if q and len(q) > 10]
+            except:
+                pass
+    return []
 
-        logging.info(f"🤖 Grok-3 generando estrategias de búsqueda...")
+
+def _try_github_models(prompt: str, system_msg: str) -> List[str]:
+    """Intenta generar queries con GitHub Models (Grok-3)."""
+    try:
+        if not getattr(config, 'GITHUB_MODELS_TOKEN', None):
+            return []
         
+        logging.info("🤖 [Query Gen] Intentando con GitHub Models (Grok-3)...")
         response = requests.post(
             f"{config.GITHUB_MODELS_ENDPOINT}/chat/completions",
-            headers=headers,
-            json=data,
+            headers={
+                "Authorization": f"Bearer {config.GITHUB_MODELS_TOKEN}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": config.PROMPT_GENERATION_MODEL,
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.3,
+                "max_tokens": 600,
+                "response_format": {"type": "json_object"}
+            },
             timeout=25
         )
-
+        
         if response.status_code == 200:
             content = response.json()["choices"][0]["message"]["content"]
-            try:
-                data_json = json.loads(content)
-                queries = data_json.get("queries", [])
-                
-                # Limpieza básica de las queries
-                clean_queries = []
-                for q in queries:
-                    # Asegurar que no sean demasiado largas o rotas
-                    if q and len(q) > 10:
-                        clean_queries.append(q)
-                
-                if clean_queries:
-                    save_to_cache(question, clean_queries)
-                    logging.info(f"   ✅ {len(clean_queries)} Estrategias generadas")
-                    return clean_queries
-                    
-            except json.JSONDecodeError:
-                logging.warning("⚠️ Error parseando JSON de Grok")
-
+            queries = _parse_llm_response(content)
+            if queries:
+                logging.info(f"   ✅ GitHub Models: {len(queries)} queries generadas")
+                return queries
+        else:
+            logging.warning(f"   ⚠️ GitHub Models respondió {response.status_code}")
     except Exception as e:
-        logging.error(f"❌ Error conexión Grok: {e}")
+        logging.warning(f"   ⚠️ GitHub Models falló: {e}")
+    return []
 
-    # Fallback si falla la IA
-    return generate_fallback_queries(question)
+
+def _try_groq(prompt: str, system_msg: str) -> List[str]:
+    """Intenta generar queries con Groq."""
+    try:
+        groq_key = getattr(config, 'GROQ_API_KEY', None)
+        if not groq_key:
+            return []
+        
+        logging.info("🤖 [Query Gen] Intentando con Groq...")
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {groq_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.3,
+                "max_tokens": 600,
+                "response_format": {"type": "json_object"}
+            },
+            timeout=25
+        )
+        
+        if response.status_code == 200:
+            content = response.json()["choices"][0]["message"]["content"]
+            queries = _parse_llm_response(content)
+            if queries:
+                logging.info(f"   ✅ Groq: {len(queries)} queries generadas")
+                return queries
+        else:
+            logging.warning(f"   ⚠️ Groq respondió {response.status_code}")
+    except Exception as e:
+        logging.warning(f"   ⚠️ Groq falló: {e}")
+    return []
+
+
+def _try_huggingface(prompt: str, system_msg: str) -> List[str]:
+    """Intenta generar queries con HuggingFace Router."""
+    try:
+        hf_token = getattr(config, 'HUGGINGFACE_TOKEN', None)
+        if not hf_token:
+            return []
+        
+        logging.info("🤖 [Query Gen] Intentando con HuggingFace...")
+        response = requests.post(
+            "https://router.huggingface.co/novita/v3/openai/chat/completions",
+            headers={
+                "Authorization": f"Bearer {hf_token}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "Qwen/Qwen2.5-72B-Instruct",
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.3,
+                "max_tokens": 600
+            },
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            content = response.json()["choices"][0]["message"]["content"]
+            queries = _parse_llm_response(content)
+            if queries:
+                logging.info(f"   ✅ HuggingFace: {len(queries)} queries generadas")
+                return queries
+        else:
+            logging.warning(f"   ⚠️ HuggingFace respondió {response.status_code}")
+    except Exception as e:
+        logging.warning(f"   ⚠️ HuggingFace falló: {e}")
+    return []
+
+
+# ============================================================
+# FALLBACK INTELIGENTE (sin LLM)
+# ============================================================
 
 def generate_fallback_queries(question: str) -> List[str]:
     """
-    Genera queries booleanos manualmente si la IA falla.
+    Genera queries EN INGLÉS desde los términos de la pregunta.
+    Prefiere acrónimos y términos técnicos en inglés.
     """
-    logging.info("🔧 Generando queries booleanos manuales (Fallback)...")
-    q = question.lower()
+    logging.info("🔧 Generando queries desde términos técnicos (Fallback sin LLM)...")
     
-    # Conceptos base
-    ai_terms = '("artificial intelligence" OR "machine learning" OR "deep learning" OR "neural network")'
+    terms = extract_english_terms(question)
     
-    # Detección básica de dominio
-    cardio = '("cardiovascular" OR "heart" OR "cardiac")'
-    if 'atrial' in q: cardio = '("atrial fibrillation" OR "arrhythmia")'
-    elif 'failure' in q: cardio = '("heart failure")'
+    if len(terms) < 2:
+        # Última línea: limpiar pregunta de stopwords y usar directamente
+        clean = _clean_question_for_search(question)
+        return [clean] if clean else ["systematic review"]
     
-    goal = '("diagnosis" OR "screening" OR "prediction")'
+    # Query 1: Todos los conceptos principales (específico)
+    q1 = " AND ".join(f'"{t}"' if ' ' in t else f'"{t}"' for t in terms[:3])
     
-    # Query 1: Estándar
-    q1 = f"{ai_terms} AND {cardio} AND {goal}"
+    # Query 2: Solo 2 conceptos principales (más amplio)
+    q2 = " AND ".join(f'"{t}"' if ' ' in t else f'"{t}"' for t in terms[:2])
     
-    # Query 2: Específico (si detecta términos)
-    metrics = '("accuracy" OR "sensitivity" OR "AUC")'
-    q2 = f"{ai_terms} AND {cardio} AND {metrics}"
+    # Query 3: Primer y tercer concepto (cobertura diferente)
+    if len(terms) >= 3:
+        q3 = f'"{terms[0]}" AND "{terms[2]}"'
+        queries = [q1, q2, q3]
+    else:
+        queries = [q1, q2]
     
-    return [q1, q2]
+    for i, q in enumerate(queries):
+        logging.info(f"   📋 Fallback Query {i+1}: {q[:100]}...")
+    
+    return queries
+
+
+def extract_english_terms(question: str) -> List[str]:
+    """
+    Extrae términos técnicos EN INGLÉS de la pregunta.
+    Prioriza: acrónimos > términos en paréntesis explicativos > sustantivos técnicos.
+    """
+    terms = []
+    seen = set()
+    
+    def _add(t: str):
+        key = t.lower().strip()
+        if key and key not in seen and len(key) > 1:
+            seen.add(key)
+            terms.append(t.strip())
+    
+    # 1. Acrónimos (SIEMPRE son en inglés): LLMs, SAST, CNN, IoT, NLP
+    acronyms = re.findall(r'\b([A-Z][A-Za-z]*[A-Z]+[a-z]*)\b', question)  # LLMs, SAST
+    acronyms += re.findall(r'\b([A-Z]{2,6}s?)\b', question)  # LLM, SAST, CNNs
+    skip = {'AND', 'OR', 'NOT', 'THE', 'FOR', 'DE', 'LA', 'LOS', 'EN', 'DEL', 'UNA'}
+    for a in acronyms:
+        clean_a = a.rstrip('s')  # LLMs -> LLM
+        if clean_a.upper() not in skip:
+            _add(a)
+    
+    # 2. Texto entre paréntesis que parece inglés/técnico
+    parens = re.findall(r'\(([^)]+)\)', question)
+    for p in parens:
+        p = p.strip()
+        # Si es un acrónimo solo, ya lo tenemos
+        if re.match(r'^[A-Z]{2,6}s?$', p):
+            continue
+        # Si contiene texto en inglés (letters only, no Spanish articles)
+        if re.search(r'[a-z]{3,}', p) and not re.search(r'\b(los|las|del|una|para|con)\b', p.lower()):
+            _add(p)
+    
+    # 3. Términos entre comillas
+    quoted = re.findall(r'"([^"]+)"', question)
+    for q in quoted:
+        _add(q)
+    
+    # 4. Detectar frases técnicas en inglés dentro de texto español
+    # Patrones comunes: "Modelos de Lenguaje Grande" → "Large Language Model"
+    english_technical = {
+        'modelos de lenguaje': 'Large Language Model',
+        'modelo de lenguaje': 'Large Language Model',
+        'aprendizaje profundo': 'deep learning',
+        'aprendizaje automático': 'machine learning',
+        'aprendizaje de máquina': 'machine learning',
+        'inteligencia artificial': 'artificial intelligence',
+        'redes neuronales': 'neural network',
+        'red neuronal': 'neural network',
+        'procesamiento de lenguaje natural': 'natural language processing',
+        'análisis estático': 'static analysis',
+        'análisis de código': 'code analysis',
+        'código fuente': 'source code',
+        'vulnerabilidades': 'vulnerability',
+        'detección de vulnerabilidades': 'vulnerability detection',
+        'falsos positivos': 'false positive',
+        'falso positivo': 'false positive',
+        'seguridad informática': 'cybersecurity',
+        'seguridad de software': 'software security',
+        'revisión de código': 'code review',
+        'enfermedades cardiovasculares': 'cardiovascular disease',
+        'enfermedad cardiovascular': 'cardiovascular disease',
+        'insuficiencia cardíaca': 'heart failure',
+        'fibrilación auricular': 'atrial fibrillation',
+        'diagnóstico temprano': 'early diagnosis',
+        'detección temprana': 'early detection',
+        'diabetes': 'diabetes',
+        'cáncer': 'cancer',
+        'salud mental': 'mental health',
+        'educación superior': 'higher education',
+        'rendimiento académico': 'academic performance',
+        'cambio climático': 'climate change',
+        'energía renovable': 'renewable energy',
+        'internet de las cosas': 'Internet of Things',
+        'computación en la nube': 'cloud computing',
+        'cadena de suministro': 'supply chain',
+        'experiencia del usuario': 'user experience',
+        'interfaz de usuario': 'user interface',
+        'base de datos': 'database',
+        'minería de datos': 'data mining',
+        'ciencia de datos': 'data science',
+        'gemelo digital': 'digital twin',
+        'gemelos digitales': 'digital twin',
+        'realidad aumentada': 'augmented reality',
+        'realidad virtual': 'virtual reality',
+    }
+    
+    q_lower = question.lower()
+    for esp, eng in english_technical.items():
+        if esp in q_lower and eng.lower() not in seen:
+            _add(eng)
+    
+    # 5. Palabras en inglés que aparecen directamente en la pregunta
+    english_words_in_text = re.findall(r'\b([a-z]{2,}(?:\s+[a-z]{2,}){0,2})\b', question)
+    for w in english_words_in_text:
+        if w.lower() not in seen and _is_english_technical(w):
+            _add(w)
+    
+    logging.info(f"   🔑 Términos técnicos (EN): {terms[:8]}")
+    return terms[:8]
+
+
+def _is_english_technical(word: str) -> bool:
+    """Detecta si una palabra/frase es un término técnico en inglés."""
+    tech_terms = {
+        'machine learning', 'deep learning', 'artificial intelligence',
+        'neural network', 'natural language processing', 'computer vision',
+        'static analysis', 'dynamic analysis', 'code review',
+        'vulnerability', 'security', 'false positive', 'false negative',
+        'source code', 'software', 'framework', 'algorithm',
+        'classification', 'detection', 'prediction', 'regression',
+        'transformer', 'attention', 'embedding', 'fine-tuning',
+        'prompt engineering', 'code generation', 'benchmark',
+        'systematic review', 'meta-analysis', 'screening',
+    }
+    return word.lower() in tech_terms
+
+
+def _clean_question_for_search(question: str) -> str:
+    """Limpia la pregunta para usarla como query de búsqueda."""
+    # Remover signos de puntuación españoles
+    clean = re.sub(r'[¿?¡!,;:.]', ' ', question)
+    # Remover stopwords comunes en español
+    stopwords = {
+        'cuál', 'cual', 'cómo', 'como', 'qué', 'que', 'es', 'son', 'las', 'los',
+        'del', 'de', 'la', 'el', 'en', 'un', 'una', 'para', 'por', 'con', 'sin',
+        'sobre', 'entre', 'más', 'mas', 'se', 'al', 'a', 'e', 'i', 'o', 'u', 'y',
+        'su', 'sus', 'mi', 'tu', 'frente', 'durante', 'mediante', 'través',
+    }
+    words = [w for w in clean.split() if w.lower() not in stopwords and len(w) > 1]
+    return " ".join(words[:10])
+
 
 def expand_query(question: str, max_terms: int = 12) -> List[str]:
-    """Función principal que ahora devuelve Queries completos, no solo palabras."""
-    return expand_query_with_grok(question)
+    """Función principal: Multi-provider LLM con fallback inteligente en inglés."""
+    return expand_query_with_llm(question)

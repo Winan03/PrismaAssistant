@@ -2,7 +2,47 @@
 venv/
 __pycache__/
 .env
+.env.*
+!.env.example
 chroma_db/
 logs/
 .cache/
 *.pyc
+
+# Modelos y datos locales
+models/
+llama.cpp/
+pdf_text_cache/
+debug/
+tmp/
+static/*.pdf
+static/*.png
+sessions/
+*.csv
+offload_cache/
+
+# Archivos generados
+*.pdf
+*.lnk
+
+# IDE
+.vscode/
+.idea/
+.gemini/
+
+# Base de datos
+*.db
+*.sqlite3
+
+# Modelos ML pesados
+*.safetensors
+*.bin
+*.onnx
+*.gguf
+spiece.model
+training/rsl_extractor_model/
+training/*.ipynb
+
+# OS
+Thumbs.db
+.DS_Store

@@ -3,155 +3,420 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PRISMA Assistant UPAO</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <title>PRISMA Assistant — Revisión Sistemática con IA</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <style>
-    body { font-family: 'Inter', sans-serif; }
-    .gradient-hero {
-      background: linear-gradient(135deg, #1e3a8a 0%, #5b21b6 50%, #059669 100%);
-      position: relative;
-      overflow: hidden;
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --primary: #0f766e;
+      --primary-light: #14b8a6;
+      --primary-dark: #0d5f58;
+      --accent: #1e40af;
+      --bg: #f8fafb;
+      --card: #ffffff;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+      --shadow-lg: 0 4px 20px rgba(0,0,0,0.08);
+      --radius: 16px;
     }
-    .gradient-hero::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.3), transparent 50%);
-      pointer-events: none;
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
-    .btn-glow {
-      background: linear-gradient(135deg, #059669, #10b981);
-      transition: all 0.4s ease;
+
+    /* ── Navbar ── */
+    .navbar {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 50;
     }
-    .btn-glow:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 20px 40px rgba(5, 150, 105, 0.4);
+    .navbar-brand {
+      font-weight: 800;
+      font-size: 1.1rem;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
     }
-    @keyframes float {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-8px); }
+    .navbar-brand i { font-size: 1.3rem; }
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
     }
-    .float-animation {
-      animation: float 3s ease-in-out infinite;
+    .nav-links a {
+      text-decoration: none;
+      color: var(--text-muted);
+      font-weight: 500;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover, .nav-links a.active {
+      color: var(--text);
+    }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 5rem 1.5rem 2rem;
+    }
+    .hero-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #e0f2f1, #e8f5e9);
+      color: var(--primary);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 6px 16px;
+      border-radius: 20px;
+      margin-bottom: 1.5rem;
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 800;
+      line-height: 1.15;
+      color: var(--text);
+      max-width: 700px;
+      margin: 0 auto 1rem;
+    }
+    .hero p {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+      max-width: 580px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ── Search Card ── */
+    .search-section {
+      max-width: 720px;
+      margin: 2rem auto 3rem;
+      padding: 0 1.5rem;
+    }
+    .search-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      padding: 2.5rem;
+    }
+    .search-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      margin-bottom: 1rem;
+      color: var(--text);
+    }
+    .search-label i {
+      color: var(--primary);
+    }
+    .search-textarea {
+      width: 100%;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 120px;
+    }
+    .search-textarea::placeholder {
+      color: #94a3b8;
+    }
+    .search-textarea:focus {
+      border-color: var(--primary-light);
+      box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.1);
+    }
+    .search-hint {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-top: 8px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    /* ── Tags & Button ── */
+    .search-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 1.5rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .method-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .method-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #f0fdf4;
+      color: var(--primary);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid #bbf7d0;
+    }
+    .btn-search {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.95rem;
+      padding: 14px 32px;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    }
+    .btn-search:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(15, 118, 110, 0.3);
+    }
+    .btn-search:active { transform: translateY(0); }
+    .btn-search:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ── Stats Row ── */
+    .stats-row {
+      max-width: 720px;
+      margin: 0 auto 4rem;
+      padding: 0 1.5rem;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+    .stat-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.2rem;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      justify-content: center;
+    }
+    .stat-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+    .stat-icon.green { background: #ecfdf5; color: var(--primary); }
+    .stat-icon.blue  { background: #eff6ff; color: var(--accent); }
+    .stat-icon.purple { background: #f5f3ff; color: #7c3aed; }
+    .stat-text strong {
+      display: block;
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .stat-text span {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: auto;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    footer strong { color: var(--primary); }
+    .footer-credits { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; margin-top: 0.6rem; font-size: 0.65rem; }
+    .footer-credits a { color: var(--text-muted); text-decoration: none; transition: color 0.15s; font-weight: 500; }
+    .footer-credits a:hover { color: var(--primary); }
+    .footer-credits .sep { color: #ddd; }
+    .footer-section-label { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; color: #cbd5e1; margin: 0 4px; }
+
+    /* ── Spinner ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .fa-spin { animation: spin 1s linear infinite; }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .search-footer { flex-direction: column; align-items: stretch; }
+      .btn-search { justify-content: center; }
+      .stats-row { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
     }
   </style>
 </head>
-<body class="bg-gradient-to-br from-slate-50 to-indigo-50 min-h-screen">
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand">
+      <i class="fas fa-flask"></i>
+      PRISMA Assistant
+    </a>
+    <ul class="nav-links">
+      <li><a href="/" class="active">Inicio</a></li>
+    </ul>
+  </nav>
 
   <!-- Hero -->
-  <div class="gradient-hero py-20 relative">
-    <div class="container mx-auto px-6 max-w-7xl text-center text-white">
-      <div class="inline-flex items-center justify-center w-24 h-24 bg-white/20 rounded-full mb-8 backdrop-blur-md float-animation">
-        <i class="fas fa-flask text-5xl text-emerald-400"></i>
-      </div>
-      <h1 class="text-5xl md:text-6xl font-bold mb-6">
-        PRISMA Assistant UPAO
-      </h1>
-      <p class="text-xl md:text-2xl text-white/90 max-w-4xl mx-auto leading-relaxed">
-        Sistema inteligente para revisiones sistemáticas con IA. <strong>Reduce el tiempo en 60%+</strong>.
-      </p>
+  <section class="hero">
+    <div class="hero-badge">PRISMA 2020 · AI-Powered</div>
+    <h1>Empiece su Revisión Sistemática</h1>
+    <p>
+      Transforme meses de cribado manual en minutos de precisión analítica. 
+      El asistente IA le guía en cada fase de su investigación científica.
+    </p>
+  </section>
 
-      <div class="flex flex-wrap justify-center gap-8 mt-12">
-        <div class="text-center">
-          <div class="text-4xl font-bold text-emerald-400">2000+</div>
-          <div class="text-white/80">Artículos por búsqueda</div>
-        </div>
-        <div class="hidden md:block w-px bg-white/30"></div>
-        <div class="text-center">
-          <div class="text-4xl font-bold text-purple-400">AI</div>
-          <div class="text-white/80">Cribado Inteligente</div>
-        </div>
-        <div class="hidden md:block w-px bg-white/30"></div>
-        <div class="text-center">
-          <div class="text-4xl font-bold text-indigo-400">∞</div>
-          <div class="text-white/80">Bases de Datos</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Formulario Principal -->
-  <div class="container mx-auto px-6 max-w-4xl -mt-16 relative z-10">
-    <div class="bg-white/90 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden border border-white/50">
-
-      <div class="p-10 space-y-8">
-        
-        <div class="text-center">
-          <h2 class="text-3xl font-bold text-gray-800 mb-3">
-            Inicia tu Revisión Sistemática
-          </h2>
-          <p class="text-gray-600">
-            Escribe tu pregunta de investigación y nosotros haremos el resto
-          </p>
+  <!-- Search -->
+  <section class="search-section">
+    <form action="/search" method="post" id="search-form">
+      <div class="search-card">
+        <label class="search-label">
+          <i class="fas fa-microscope"></i>
+          Pregunta de Investigación
+        </label>
+        <textarea 
+          name="question"
+          required
+          id="question-input"
+          class="search-textarea"
+          placeholder="e.g., ¿Cuál es el impacto de la IA en la detección temprana de enfermedades cardiovasculares?"
+        ></textarea>
+        <div class="search-hint">
+          Pulsar <kbd style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:0.75rem;border:1px solid #e2e8f0">Enter</kbd> para enviar
         </div>
 
-        <form action="/search" method="post" id="search-form">
-          
-          <!-- Pregunta de Investigación -->
-          <div class="space-y-4">
-            <label class="flex items-center gap-3 text-xl font-bold text-gray-800">
-              <i class="fas fa-magnifying-glass text-emerald-600"></i>
-              Pregunta de Investigación
-            </label>
-            <textarea 
-              name="question" 
-              required 
-              placeholder="Ejemplo: ¿Cuál es la efectividad de la inteligencia artificial en el diagnóstico temprano de enfermedades cardiovasculares?"
-              class="w-full p-5 border-2 border-gray-200 rounded-2xl focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 transition-all resize-none text-gray-800 placeholder-gray-400"
-              rows="6"
-              id="question-input"
-            ></textarea>
-            <p class="text-sm text-emerald-600 flex items-center gap-2">
-              <i class="fas fa-circle-info"></i>
-              Sea específico para obtener mejores resultados
-            </p>
+        <div class="search-footer">
+          <div class="method-tags">
+            <span class="method-tag"><i class="fas fa-diagram-project"></i> PRISMA</span>
+            <span class="method-tag"><i class="fas fa-wand-magic-sparkles"></i> Screening IA</span>
           </div>
-
-          <!-- Botón Principal -->
-          <button type="submit" 
-                  class="w-full btn-glow text-white py-5 px-8 rounded-2xl font-bold text-xl shadow-xl transform transition-all duration-300 flex items-center justify-center gap-4 group mt-8">
-            <i class="fas fa-rocket text-2xl group-hover:animate-pulse"></i>
-            <span>Buscar Artículos</span>
-            <i class="fas fa-arrow-right group-hover:translate-x-2 transition-transform"></i>
+          <button type="submit" class="btn-search" id="submit-btn">
+            Iniciar Búsqueda con IA
+            <i class="fas fa-arrow-right"></i>
           </button>
+        </div>
+      </div>
+    </form>
+  </section>
 
-          <p class="text-center text-sm text-gray-500 mt-4">
-            <i class="fas fa-clock"></i> Tiempo estimado: <strong>3-5 minutos</strong>
-          </p>
-        </form>
+  <!-- Stats -->
+  <section class="stats-row">
+    <div class="stat-box">
+      <div class="stat-icon green"><i class="fas fa-database"></i></div>
+      <div class="stat-text">
+        <strong>2,000+</strong>
+        <span>Fuentes Indexadas</span>
       </div>
     </div>
-  </div>
+    <div class="stat-box">
+      <div class="stat-icon blue"><i class="fas fa-robot"></i></div>
+      <div class="stat-text">
+        <strong>IA Screening</strong>
+        <span>Cribado Inteligente</span>
+      </div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-icon purple"><i class="fas fa-chart-line"></i></div>
+      <div class="stat-text">
+        <strong>99%</strong>
+        <span>Precisión Analítica</span>
+      </div>
+    </div>
+  </section>
 
   <!-- Footer -->
-  <footer class="bg-gradient-to-r from-gray-900 to-gray-800 text-white py-10">
-    <div class="container mx-auto px-6 text-center">
-      <p class="text-lg font-semibold">
-        © 2025 <span class="text-emerald-400">Universidad Privada Antenor Orrego</span>
-      </p>
-      <p class="text-sm text-gray-400 mt-2">
-        Powered by OpenRouter AI • ChromaDB • FastAPI
-      </p>
+  <footer>
+    <div>© 2025 <strong>Universidad Privada Antenor Orrego</strong></div>
+    <div class="footer-credits">
+      <span class="footer-section-label">Datos</span>
+      <a href="https://www.semanticscholar.org/" target="_blank">Semantic Scholar</a>
+      <span class="sep">·</span>
+      <a href="https://openalex.org/" target="_blank">OpenAlex</a>
+      <span class="sep">·</span>
+      <a href="https://europepmc.org/" target="_blank">Europe PMC</a>
+      <span class="sep">·</span>
+      <a href="https://unpaywall.org/" target="_blank">Unpaywall</a>
+      <span class="sep">|</span>
+      <span class="footer-section-label">IA</span>
+      <a href="https://ai.google.dev/" target="_blank">Google Gemini</a>
+      <span class="sep">·</span>
+      <a href="https://openrouter.ai/" target="_blank">OpenRouter</a>
+      <span class="sep">·</span>
+      <a href="https://groq.com/" target="_blank">Groq</a>
+      <span class="sep">·</span>
+      <a href="https://cerebras.ai/" target="_blank">Cerebras</a>
+      <span class="sep">|</span>
+      <span class="footer-section-label">Infra</span>
+      <a href="https://www.trychroma.com/" target="_blank">ChromaDB</a>
+      <span class="sep">·</span>
+      <a href="https://fastapi.tiangolo.com/" target="_blank">FastAPI</a>
     </div>
   </footer>
 
   <script>
     // Auto-resize textarea
-    const textarea = document.getElementById('question-input');
-    textarea.addEventListener('input', function() {
+    const ta = document.getElementById('question-input');
+    ta.addEventListener('input', function() {
       this.style.height = 'auto';
-      this.style.height = (this.scrollHeight) + 'px';
+      this.style.height = this.scrollHeight + 'px';
     });
 
-    // Mostrar loading al enviar
-    document.getElementById('search-form').addEventListener('submit', function(e) {
-      const button = this.querySelector('button[type="submit"]');
-      button.innerHTML = '<i class="fas fa-spinner fa-spin text-2xl"></i> Buscando artículos...';
-      button.disabled = true;
+    // Submit → Enter
+    ta.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        document.getElementById('search-form').requestSubmit();
+      }
+    });
+
+    // Loading state
+    document.getElementById('search-form').addEventListener('submit', function() {
+      const btn = document.getElementById('submit-btn');
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando artículos...';
+      btn.disabled = true;
     });
   </script>
-
 </body>
 </html>

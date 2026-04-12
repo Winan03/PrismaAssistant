@@ -1,0 +1,25 @@
+{
+    "domain_name": "Medicina",
+    "gender_rules": [
+        {
+            "pattern": "\\blas\\s+falsos\\s+negativos\\b",
+            "replacement": "los falsos negativos"
+        }
+    ],
+    "technical_definitions": {
+        "paciente": "individuo receptor de atención médica personalizada y seguimiento clínico",
+        "estudio clínico": "investigación experimental que evalúa la seguridad y eficacia de intervenciones terapéuticas",
+        "metaanálisis": "síntesis estadística y cualitativa de múltiples ensayos clínicos controlados",
+        "precisión diagnóstica": "capacidad de una prueba para identificar correctamente la presencia o ausencia de una patología"
+    },
+    "term_mappings": {
+        "ya que": "debido a que",
+        "nos permite": "se permite",
+        "tratamiento": "intervención terapéutica",
+        "pacientes": "sujetos de estudio"
+    },
+    "forbidden_phrases": {
+        "en los últimos años": "recientemente",
+        "nuestro estudio": "el presente estudio"
+    }
+}

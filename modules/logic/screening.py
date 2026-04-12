@@ -1,0 +1,477 @@
+import logging
+import re
+import numpy as np
+from typing import List, Dict, Set
+from sklearn.metrics.pairwise import cosine_similarity
+
+import requests
+import json
+import config
+from modules.ai.embedding_service import get_embeddings, get_single_embedding
+from utils.query_expander import expand_query_with_llm, extract_english_terms, get_exclusion_terms_with_llm
+from modules.core.search_engine import detect_search_domain
+
+# ============================================================
+# CONFIGURACION DEL MODELO (UNIFICADO VIA embedding_service)
+# ============================================================
+MODEL_NAME = config.EMBEDDING_MODEL
+
+def get_embedding(text: str) -> np.ndarray:
+    """Atajo para obtener embedding de un texto único."""
+    return get_single_embedding(text)
+
+
+# ============================================================
+# EXTRACCION DE KEYWORDS DE DOMINIO
+# ============================================================
+
+# Palabras metodologicas que NO distinguen dominio (Genéricas)
+METHODOLOGY_TERMS = {
+    'machine learning', 'deep learning', 'artificial intelligence', 'ai',
+    'neural network', 'model', 'algorithm', 'classification', 'prediction',
+    'analysis', 'method', 'approach', 'technique', 'system',
+    'framework', 'evaluation', 'comparison', 'review', 'survey', 'study',
+    'transformer', 'attention', 'embedding', 'training', 'dataset',
+    'accuracy', 'precision', 'recall', 'f1', 'performance', 'optimization',
+    'hyperparameter', 'tuning', 'preprocessing', 'feature', 'extraction',
+    'regression', 'random forest', 'xgboost', 'lstm', 'cnn', 'rnn', 'gru',
+    'bayesian', 'probabilistic', 'stochastic', 'ensemble', 'boosting',
+    'cross-validation', 'overfitting', 'generalization', 'benchmark',
+    'error', 'reduction', 'improvement',
+    'automated', 'automatic', 'intelligent', 'smart', 'adaptive',
+    'nlp', 'natural language processing', 'text mining', 'sentiment',
+    'supervised', 'unsupervised', 'reinforcement', 'transfer learning',
+    'fine-tuning', 'pre-trained',
+}
+
+# Stopwords en espanol e ingles
+STOPWORDS = {
+    'cual', 'como', 'que', 'es', 'son', 'las', 'los',
+    'del', 'de', 'la', 'el', 'en', 'un', 'una', 'para', 'por', 'con', 'sin',
+    'sobre', 'entre', 'mas', 'se', 'al', 'a', 'e', 'i', 'o', 'u', 'y',
+    'su', 'sus', 'mi', 'tu', 'frente', 'durante', 'mediante',
+    'the', 'an', 'and', 'or', 'not', 'in', 'on', 'of', 'to', 'for',
+    'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had',
+    'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
+    'this', 'that', 'these', 'those', 'with', 'from', 'by', 'at', 'as',
+    'their', 'its', 'what', 'which', 'how', 'when', 'where', 'who', 'whom',
+    'medida', 'eficacia', 'reducen', 'margen', 'base',
+    'herramientas', 'tradicionales', 'modelos', 'grandes', 'lenguaje',
+}
+
+# Traducciones espanol-ingles para terminos de dominio comunes
+DOMAIN_TRANSLATIONS = {
+    'codigo fuente': 'source code',
+    'codigo': 'code',
+    'vulnerabilidades': 'vulnerability',
+    'vulnerabilidad': 'vulnerability',
+    'analisis estatico': 'static analysis',
+    'falsos positivos': 'false positive',
+    'deteccion de vulnerabilidades': 'vulnerability detection',
+    'seguridad de software': 'software security',
+    'revision de codigo': 'code review',
+    'eventos deportivos': 'sports events',
+    'deportivos': 'sports',
+    'deportes': 'sports',
+    'predicciones deportivas': 'sports prediction',
+    'variables temporales': 'time series temporal',
+    'enfermedades cardiovasculares': 'cardiovascular disease',
+    'salud mental': 'mental health',
+    'educacion superior': 'higher education',
+    'energia renovable': 'renewable energy',
+    'internet de las cosas': 'internet of things iot',
+    'cadena de suministro': 'supply chain',
+    'redes neuronales': 'neural network',
+    'inteligencia artificial': 'artificial intelligence',
+    'aprendizaje profundo': 'deep learning',
+    'aprendizaje automatico': 'machine learning',
+}
+
+
+# Eliminadas listas hardcoded (v6.1 - Dinamismo Puro)
+# Ahora los términos de exclusión se generan vía LLM específicamente para cada pregunta de investigación.
+
+def _extract_comparison_poles(question: str) -> List[List[str]]:
+    """Extrae dinámicamente los dos polos de una comparación (A vs B) (v7.2)."""
+    if not question: return []
+    
+    prompt = f"""Research Question: "{question}"
+
+What are the TWO main concepts being compared? List synonyms (technical terms in English) for each.
+Force ALL terms to be in ENGLISH even if the question is in another language.
+
+Respond with ONLY this JSON format:
+{{"poles": [["concept1", "synonym1a", "synonym1b"], ["concept2", "synonym2a", "synonym2b"]]}}"""
+    
+    try:
+        # Usamos Groq directamente para forzar JSON mode y temperatura 0
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {config.GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "messages": [
+                    {"role": "system", "content": "You are a research engineer. Extract comparison poles as JSON only."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.0,
+                "max_tokens": 150,
+                "response_format": {"type": "json_object"}
+            },
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            content = response.json()["choices"][0]["message"]["content"]
+            data = json.loads(content)
+            poles = data.get("poles", [])
+            if poles and len(poles) >= 2:
+                logging.info(f"⚖️ Polos de comparación extraídos: {poles[0][0]} vs {poles[1][0]}")
+                return poles
+    except Exception as e:
+        logging.warning(f"⚠️ No se pudieron extraer polos: {e}")
+    
+    return []
+
+
+def extract_domain_keywords(question: str) -> Set[str]:
+    """
+    Extrae keywords DE DOMINIO de la pregunta de investigacion.
+    Excluye palabras metodologicas (ML, AI, etc.) compartidas entre dominios.
+    """
+    import unicodedata
+    
+    def strip_accents(text):
+        """Quita acentos: código -> codigo, análisis -> analisis"""
+        nfkd = unicodedata.normalize('NFKD', text)
+        return ''.join(c for c in nfkd if not unicodedata.combining(c))
+    
+    domain_keywords = set()
+    q_lower = strip_accents(question.lower())
+
+    # 1. Traducir frases compuestas espanol-ingles
+    for esp, eng in DOMAIN_TRANSLATIONS.items():
+        if esp in q_lower:
+            for word in eng.split():
+                if word.lower() not in METHODOLOGY_TERMS and len(word) > 2:
+                    domain_keywords.add(word.lower())
+
+    # 2. Extraer acronimos (SAST, LLM, IoT, CNN, etc.)
+    acronyms = re.findall(r'\b([A-Z]{2,6}s?)\b', question)
+    skip_acronyms = {'AND', 'OR', 'NOT', 'THE', 'FOR', 'DE', 'LA', 'LOS', 'EN', 'DEL', 'UNA'}
+    for a in acronyms:
+        clean = a.rstrip('s').lower()
+        if clean.upper() not in skip_acronyms and clean not in METHODOLOGY_TERMS:
+            domain_keywords.add(clean)
+
+    # 3. Extraer palabras en ingles directas (de texto mixto espanol/ingles)
+    english_words = re.findall(r'\b([a-z]{3,})\b', q_lower)
+    for w in english_words:
+        if w not in STOPWORDS and w not in METHODOLOGY_TERMS and len(w) > 2:
+            spanish_common = {'como', 'para', 'pero', 'puede', 'porque', 'tiene',
+                            'cada', 'otro', 'otra', 'entre', 'desde',
+                            'hasta', 'sin', 'mejor', 'peor', 'mayor',
+                            'menor', 'parte', 'forma', 'modo', 'tipo', 'caso',
+                            'manera', 'vez', 'tiempo', 'punto', 'lado',
+                            'nivel', 'dentro', 'fuera', 'antes'}
+            if w not in spanish_common:
+                domain_keywords.add(w)
+
+    # 4. Extraer texto entre comillas o parentesis
+    quoted = re.findall(r'["\u00ab]([^"\u00bb]+)["\u00bb]', question)
+    for q in quoted:
+        for word in q.lower().split():
+            if word not in STOPWORDS and word not in METHODOLOGY_TERMS and len(word) > 2:
+                domain_keywords.add(word)
+
+    # 5. Limpiar
+    domain_keywords.discard('')
+
+    logging.info(f"🏷️ Keywords de dominio extraidos: {sorted(domain_keywords)}")
+    return domain_keywords
+
+
+def compute_domain_relevance(article: Dict, domain_keywords: Set[str], 
+                              semantic_queries: List[str] = None) -> float:
+    """
+    Calcula relevancia de dominio usando:
+    1. Frases completas de las queries LLM (n-gramas 2-4 palabras).
+    2. Keywords individuales como fallback.
+    """
+    title = (article.get('title', '') or '').lower()
+    abstract = (article.get('abstract', '') or '').lower()
+    text = f"{title}. {abstract}"
+
+    if not text.strip():
+        return 0.0
+
+    # PRIORIDAD 1: N-gramas de las queries semánticas
+    if semantic_queries:
+        phrase_matches = set()
+        for query in semantic_queries:
+            words = query.lower().split()
+            # Extraer bigramas a tetragramas
+            for n in range(2, min(5, len(words) + 1)):
+                for i in range(len(words) - n + 1):
+                    phrase = " ".join(words[i:i+n])
+                    if phrase in text:
+                        phrase_matches.add(phrase)
+        
+        count = len(phrase_matches)
+        if count >= 3: return 1.0
+        elif count == 2: return 0.75
+        elif count == 1: return 0.50
+
+    # FALLBACK: Keywords individuales
+    matches = sum(1 for kw in domain_keywords if kw in text)
+    if matches == 0: return 0.0
+    elif matches == 1: return 0.4
+    elif matches == 2: return 0.7
+    else: return 1.0
+
+
+def normalize_scores_robust(scores: np.ndarray) -> np.ndarray:
+    """
+    Normaliza scores usando percentiles (5-95) para ignorar outliers.
+    Evita la distorsión causada por un solo artículo líder atípico.
+    """
+    if len(scores) == 0:
+        return scores
+    
+    p5, p95 = np.percentile(scores, 5), np.percentile(scores, 95)
+    
+    if p95 == p5:
+        return np.full_like(scores, 0.5)
+        
+    # Clipping y Min-Max
+    clipped = np.clip(scores, p5, p95)
+    normalized = (clipped - p5) / (p95 - p5)
+    return normalized
+
+def compute_keyword_boost(article: Dict, english_terms: List[str], 
+                          semantic_queries: List[str] = None,
+                          comparison_poles: List[List[str]] = None) -> float:
+    """
+    Boost/Malus basado en qué tan bien el paper coincide con el ÁNGULO
+    específico de la RQ, no solo con los términos sueltos. (v7.0)
+    """
+    if not english_terms:
+        return 0.0
+        
+    title = str(article.get('title', '')).lower()
+    abstract = str(article.get('abstract', '')).lower()
+    content = f"{title}. {abstract}"
+    
+    # --- BOOST: términos de la RQ presentes ---
+    matches = sum(1 for t in english_terms if t.lower() in content)
+    coverage = matches / len(english_terms)
+    critical_terms = english_terms[:3]
+    critical_matches = sum(1 for t in critical_terms if t.lower() in content)
+    critical_coverage = critical_matches / len(critical_terms) if critical_terms else 0
+    base_boost = (coverage * 0.4) + (critical_coverage * 0.6)
+
+    # --- MALUS CONTEXTUAL (Agnóstico): Contraste por trigramas ---
+    if semantic_queries:
+        trigram_hits = 0
+        for q in semantic_queries:
+            words = q.lower().split()
+            for i in range(len(words) - 2):
+                trigram = " ".join(words[i:i+3])
+                if trigram in content:
+                    trigram_hits += 1
+        
+        if matches >= 2 and trigram_hits == 0:
+            base_boost *= 0.5
+
+    # --- MALUS POR COMPARACIÓN AUSENTE (v7.0 Agnóstico) ---
+    if comparison_poles and len(comparison_poles) >= 2:
+        pole_a_present = any(term.lower() in content for term in comparison_poles[0])
+        pole_b_present = any(term.lower() in content for term in comparison_poles[1])
+        
+        # Si falta CUALQUIERA de los dos polos, penalizar (Estudio no comparativo)
+        if not pole_a_present or not pole_b_present:
+            base_boost *= 0.6 # Malus del 40%
+            
+    return base_boost
+
+def get_adaptive_threshold(scores: List[float], target_n: int = 50, min_threshold: float = 0.40) -> float:
+    """
+    Calcula un umbral adaptativo para obtener ~target_n artículos.
+    Nunca baja del min_threshold (suelo absoluto de calidad).
+    """
+    if not scores:
+        return min_threshold
+    
+    sorted_scores = sorted(scores, reverse=True)
+    adaptive = sorted_scores[min(target_n - 1, len(sorted_scores) - 1)]
+    
+    # El umbral adaptativo no puede ser menor al suelo absoluto
+    final_thresh = max(adaptive, min_threshold)
+    logging.info(f"🎯 Umbral Adaptativo: {final_thresh:.2f} (Target N={target_n}, Suelo={min_threshold})")
+    return final_thresh
+
+def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
+                    max_results: int = 50, original_question: str = "") -> List[Dict]:
+    """
+    Filtra articulos usando SPECTER2 + filtro de relevancia de dominio.
+
+    ESTRATEGIA:
+    1. Calcula similitud semantica (SPECTER2)
+    2. Calcula relevancia de dominio (keywords de la pregunta)
+    3. Score ajustado = similitud - penalizacion_dominio
+    4. Filtra con umbral minimo
+    5. Prioriza articulos CON URL/PDF
+    """
+    if not articles:
+        return []
+
+
+    # 1. Extraer keywords de dominio de la pregunta original
+    domain_keywords = extract_domain_keywords(original_question or query)
+
+    # 2. Preparar textos (Titulo + Abstract) - Compatibilidad MPNet
+    texts = [f"{art.get('title', '') or ''}. {art.get('abstract', '') or ''}" for art in articles]
+
+    logging.info(f"🚀 Screening semantico de {len(texts)} articulos...")
+
+    # Default por seguridad (evita NameError si hay excepción previa)
+    RAW_SCORE_FLOOR = 0.40
+    
+    try:
+        # 1. Obtener queries de screening en INGLES (Cierre de Gap Semántico)
+        original_q = original_question or query
+        semantic_queries = expand_query_with_llm(original_q)
+        english_terms = extract_english_terms(original_q)
+        
+        exclusion_terms = get_exclusion_terms_with_llm(original_q)
+        comparison_poles = _extract_comparison_poles(original_q)
+        
+        if comparison_poles:
+            poles_str = " vs ".join([p[0] for p in comparison_poles])
+            logging.info(f"⚖️ Polos de comparación detectados: {poles_str}")
+
+        logging.info(f"🌎 Screening con {len(semantic_queries)} queries y {len(exclusion_terms)} filtros de exclusión...")
+
+        # 2. Scoring Multi-Query con numpy (sin PyTorch)
+        # Encode todos los abstracts una vez
+        corpus_embeddings = get_embeddings(texts)  # shape: (n_articles, 768)
+        
+        # Calcular scores por cada query
+        all_query_scores = []
+        for q in semantic_queries:
+            q_emb = get_single_embedding(q)  # shape: (768,)
+            q_scores = cosine_similarity([q_emb], corpus_embeddings)[0]  # (n_articles,)
+            all_query_scores.append(q_scores)
+            
+        all_query_scores = np.array(all_query_scores) # (n_queries, n_articles)
+        
+        # Combinación Probabilística: Max (70%) + Mean (30%)
+        max_scores = np.max(all_query_scores, axis=0)
+        mean_scores = np.mean(all_query_scores, axis=0)
+        final_raw_scores = (max_scores * 0.7) + (mean_scores * 0.3)
+
+        # 🧠 DETECTAR DOMINIO para validación suave
+        domain_results = detect_search_domain(original_question or query)
+        detected_domain = domain_results['id']
+
+        # 3. Normalización Robusta (Percentiles P5-P95)
+        normalized_scores = normalize_scores_robust(final_raw_scores)
+        
+        max_raw = np.max(final_raw_scores)
+        
+        # --- FILTRO RAW ADAPTATIVO (Fix v5.2) ---
+        # Corpus más grande -> más ruido -> filtro más estricto
+        corpus_size = len(articles)
+        if corpus_size > 300:
+            RAW_SCORE_FLOOR = 0.38  # v8.0: Relajado para asegurar pool de 80
+        elif corpus_size > 100:
+            RAW_SCORE_FLOOR = 0.38
+        else:
+            RAW_SCORE_FLOOR = 0.38  # Permisivo para corpus pequeños
+            
+        logging.info(f"📊 Líder Raw: {max_raw:.3f} | RAW FLOOR adaptativo: {RAW_SCORE_FLOOR} (corpus={corpus_size})")
+        
+        # Capa 1: Gatekeeper Dinámico
+
+        for i, art in enumerate(articles):
+            raw_val = float(final_raw_scores[i])
+            rel_val = float(normalized_scores[i])
+            
+            content_lower = f"{art.get('title', '')} {art.get('abstract', '')}".lower()
+
+            # --- CAPA 1: GATEKEEPER DINÁMICO (Malus por términos de exclusión LLM) ---
+            exclusion_malus = 0.0
+            for term in exclusion_terms:
+                if term.lower() in content_lower:
+                    exclusion_malus -= 0.15  # v7.8: Malus balanceado (v7.2 stable)
+            
+            domain_bonus = exclusion_malus
+
+            # --- CAPA 2: KEYWORD BOOST CON COMPARACIÓN (v7.0) ---
+            kw_boost = compute_keyword_boost(art, english_terms, semantic_queries, comparison_poles) * 0.20 
+            
+            # Score Final Combinado
+            final_score = rel_val + domain_bonus + kw_boost
+            
+            # Asegurar rango [0, 1]
+            final_score = min(max(final_score, 0.0), 1.0)
+
+            art['similarity'] = final_score
+            art['raw_similarity'] = raw_val
+            art['domain_relevance'] = compute_domain_relevance(art, domain_keywords, semantic_queries)
+            
+            if i < 5:
+                logging.info(f"🔍 [SCREENING] Art '{art.get('title', '')[:40]}...': raw={raw_val:.3f}, final_rel={final_score:.3f}, kw_boost={kw_boost:.2f}")
+
+    except Exception as e:
+        logging.error(f"❌ Error critico en screening: {e}")
+        for i, art in enumerate(articles):
+            art['similarity'] = 1.0 - (i / len(articles))
+            art['raw_similarity'] = art['similarity']
+            art['domain_relevance'] = 1.0
+
+    # ============================================================
+    # ESTRATEGIA DE SELECCION (AGNÓSTICA V4)
+    # ============================================================
+    # 1. Filtrar primero por Raw Score (Criterio de Inclusión Académico Adaptativo)
+    eligible = [a for a in articles if a.get('raw_similarity', 0) >= RAW_SCORE_FLOOR]
+    
+    # 2. Ordenar por Normalized Score (Ranking Relativo)
+    eligible.sort(key=lambda x: x.get('similarity', 0), reverse=True)
+
+    logging.info(f"🔍 Filtro RAW ({RAW_SCORE_FLOOR}): {len(articles)} → {len(eligible)} candidatos")
+
+    # 3. Priorizar artículos con URL válida
+    final_selection = [a for a in eligible if a.get('url') and len(str(a.get('url'))) > 10]
+    
+    # Completar con mejores sin URL
+    if len(final_selection) < max_results:
+        without_url = [a for a in eligible if not (a.get('url') and len(str(a.get('url'))) > 10)]
+        needed = max_results - len(final_selection)
+        final_selection.extend(without_url[:needed])
+
+    # ============================================================
+    # REPORTE DE SELECCION V3
+    # ============================================================
+    if final_selection:
+        count_with_url = sum(1 for art in final_selection if art.get('url'))
+        count_without_url = len(final_selection) - count_with_url
+        avg_similarity = np.mean([art['similarity'] for art in final_selection])
+        avg_domain = np.mean([art.get('domain_relevance', 0) for art in final_selection])
+
+        logging.info(
+            f"\n    ✅ SCREENING V3 COMPLETADO:\n"
+            f"       📄 Total seleccionados: {len(final_selection)}\n"
+            f"       🔗 Con URL/PDF: {count_with_url}\n"
+            f"       ❌ Sin URL: {count_without_url}\n"
+            f"       📊 Similitud promedio (Percentil Scaled): {avg_similarity*100:.1f}%\n"
+            f"       🏷️ Relevancia de dominio promedio: {avg_domain*100:.1f}%\n"
+            f"       🎯 Rango similitud: {min(art['similarity'] for art in final_selection)*100:.1f}% - {max(art['similarity'] for art in final_selection)*100:.1f}%\n"
+        )
+    else:
+        logging.warning("⚠️ SCREENING V3: Ningún artículo superó los umbrales de relevancia")
+
+    return final_selection[:max_results]

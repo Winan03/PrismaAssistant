@@ -1,27 +1,32 @@
-# Usar Python 3.12 versión ligera
-FROM python:3.12-slim
+FROM python:3.11-slim
 
-# Evitar que Python genere archivos .pyc y forzar salida de logs inmediata
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PORT=7860
 
-# Directorio de trabajo
 WORKDIR /app
 
-# Instalar dependencias del sistema necesarias para algunas librerías de Python
-RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ && rm -rf /var/lib/apt/lists/*
+# Dependencias del sistema
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ git curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements e instalar
+# Instalar dependencias Python
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copiar el resto del código
+# Pre-descargar el modelo de embeddings durante el BUILD
+# -> Primera request no tarda en descargar ~420MB
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-mpnet-base-v2'); print('Modelo all-mpnet-base-v2 descargado')"
+
+# Copiar codigo de la app
 COPY . .
 
-# Exponer puerto 8080 (Solo informativo)
-EXPOSE 8080
+# Crear directorio ChromaDB
+RUN mkdir -p chroma_db
 
-# COMANDO DE INICIO (Corregido y Simplificado)
-# Usamos formato de lista ["..."] que es más seguro
-# Forzamos el puerto 8080 y el host 0.0.0.0
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--loop", "asyncio"]
+# HF Spaces usa el puerto 7860
+EXPOSE 7860
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]

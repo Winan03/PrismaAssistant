@@ -4,29 +4,75 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ==========================
-# 1. CEREBRO: GitHub Models (Grok-3)
+# 🚀 GOOGLE GEMINI API (RECOMENDADO - NIVEL GRATUITO)
 # ==========================
 
-GITHUB_MODELS_TOKEN = os.getenv("GITHUB_MODELS_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEYS = [
+    os.getenv("GEMINI_API_KEY"),
+    os.getenv("GEMINI_API_KEY_2"),
+    os.getenv("GEMINI_API_KEY_3"),
+    os.getenv("GEMINI_API_KEY_4"),
+    os.getenv("GEMINI_API_KEY_5"),
+]
+GEMINI_API_KEYS = [k for k in GEMINI_API_KEYS if k]  # Filtrar vacíos/None
+
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+
+# ==========================
+# 1. CEREBRO: GitHub Models (GPT-4o)
+# ==========================
+
+GITHUB_GPT4O_TOKEN = os.getenv("GITHUB_GPT4O_TOKEN")
 GITHUB_MODELS_ENDPOINT = os.getenv("GITHUB_MODELS_ENDPOINT", "https://models.github.ai/inference")
-PROMPT_GENERATION_MODEL = os.getenv("PROMPT_GENERATION_MODEL", "xai/grok-3")
+GITHUB_GPT4O_MODEL = os.getenv("GITHUB_GPT4O_MODEL", "gpt-4o")
+PROMPT_GENERATION_MODEL = os.getenv("PROMPT_GENERATION_MODEL", "gpt-4o")
+
+# LOCAL EXTRACTOR (Qwen 2.5 3B GGUF)
+# ==========================
+# v12.2: Reactivado — Soporte CUDA habilitado.
+# Auto-detecta GPU o CPU automáticamente.
+ENABLE_LOCAL_EXTRACTOR = os.getenv("ENABLE_LOCAL_EXTRACTOR", "True").lower() == "true"
+LOCAL_EXTRACTOR_PATH = os.getenv("LOCAL_EXTRACTOR_PATH", "models/qwen2.5-3b-instruct-q4_k_m.gguf")
+
 
 # ==============================================================================
-# 2. GROQ (Llama 3.3 70B) - PARA SYNTHESIS
+# 2. CEREBRAS (Llama 3.3 70B) - PROVIDER PRINCIPAL (1M tokens/día gratis)
 # ==============================================================================
-GROQ_API_KEY = os.getenv("GROQ_syntesis_TOKEN")  # ← Cambiado
+CEREBRAS_API_KEY = os.getenv("CEREBRAS_API_KEY")
+CEREBRAS_API_KEYS = [
+    os.getenv("CEREBRAS_API_KEY"),
+    os.getenv("CEREBRAS_API_KEY_2"),
+    os.getenv("CEREBRAS_API_KEY_3"),
+]
+CEREBRAS_API_KEYS = [k for k in CEREBRAS_API_KEYS if k]  # Filtrar vacíos/None
+
+CEREBRAS_MODEL = "llama3.1-8b"  # v12.6: Verificado vía API (/v1/models)
+CEREBRAS_ENDPOINT = "https://api.cerebras.ai/v1/chat/completions"
+
+# ==============================================================================
+# 3. GROQ (Llama 3.3 70B) - PARA SYNTHESIS
+# ==============================================================================
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")  # Usamos la variable estándar del .env
 GROQ_MODEL = "llama-3.3-70b-versatile"  # Modelo más potente
 GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 
 # ==========================
-# 3. MÚSCULO AUXILIAR: OpenRouter (Backup)
+# 3. MÚSCULO AUXILIAR: OpenRouter (Modelos 100% Gratuitos)
 # ==========================
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "gpt-4o-mini")
-OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://models.github.ai/inference")
-OPENROUTER_RATE_LIMIT_RPM = 15
-OPENROUTER_RATE_LIMIT_TPM = 150000
+# Modelo PRINCIPAL gratuito: OpenAI gpt-oss-120b (120B MoE, 131K ctx, $0, bajo tráfico)
+# Open-weight de OpenAI — muy potente y menos saturado que Llama/Mistral
+OPENROUTER_MODEL = "openai/gpt-oss-120b"
+# Modelo ALTERNATIVO 1: Qwen3 Next 80B A3B (80B, 262K ctx, $0, tráfico muy bajo)
+OPENROUTER_MODEL_ALT = "qwen/qwen3-next-80b:free"
+# Modelo ALTERNATIVO 2: Arcee Trinity Large (400B MoE, 131K ctx, $0)
+OPENROUTER_MODEL_ALT2 = "arcee-ai/trinity-large-preview:free"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_RATE_LIMIT_RPM = 20
+OPENROUTER_RATE_LIMIT_TPM = 200000
 
 # ==========================
 # 4. APIs Externas
@@ -39,15 +85,21 @@ SEMANTIC_SCHOLAR_API_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY")
 SEMANTIC_SCHOLAR_MAX_RESULTS = 100
 SEMANTIC_SCHOLAR_RATE_LIMIT = 1.0
 
+# Email institucional para APIs académicas (OpenAlex polite pool, Europe PMC)
+ACADEMIC_EMAIL = "jnacarinoa1@upao.edu.pe"
+
 REDALYC_API_KEY = os.getenv("REDALYC_API_KEY")
+HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
+VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY")
 
 # ==========================
 # 5. Base de Datos y Vectores
 # ==========================
 
 MONGODB_URI = os.getenv("MONGODB_URI")
+ENABLE_MONGODB = os.getenv("ENABLE_MONGODB", "False").lower() == "true"
 MILVUS_URI = "chroma_db"
-MILVUS_COLLECTION = os.getenv("MILVUS_COLLECTION", "articles_collection")
+MILVUS_COLLECTION = os.getenv("MILVUS_COLLECTION", "articles_collection_v3")
 
 EMBEDDING_MODEL = "all-mpnet-base-v2"
 EMBEDDING_DIM = 768
@@ -67,12 +119,13 @@ PRISMA_AUTO_THRESHOLD = 65
 #==========================
 
 DYNAMIC_COLUMNS = {
-    "summary": "Resumen (Español)",
+    "summary": "Resumen",
+    "objectives": "Objetivo",
     "methodology": "Metodología",
-    "population": "Población",
-    "key_findings": "Hallazgos Clave",
-    "limitations": "Limitaciones",
-    "conclusions": "Conclusiones"
+    "subject": "Objeto de estudio",
+    "variables": "Variables",
+    "key_findings": "Hallazgos",
+    "limitations": "Limitaciones"
 }
 
 # ==========================
@@ -104,6 +157,9 @@ def validate_config():
 
     if not SEMANTIC_SCHOLAR_API_KEY:
         warnings.append("⚠️ SEMANTIC_SCHOLAR_API_KEY no configurada.")
+
+    if not HUGGINGFACE_API_KEY:
+        warnings.append("⚠️ HUGGINGFACE_API_KEY no configurada (Necesaria para síntesis remota).")
 
     if warnings:
         for w in warnings:
