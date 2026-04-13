@@ -167,6 +167,7 @@ def save_to_milvus(articles):
 
         CHUNK_SIZE = 1200
         OVERLAP = 200
+        MAX_CHUNKS_PER_ARTICLE = 40  # v17.1: Evitar que survey papers de 400k chars generen 300+ chunks
         seen_ids_in_batch = set()
         skipped_articles = 0
 
@@ -233,6 +234,8 @@ def save_to_milvus(articles):
                 chunks.append(current_chunk.strip())
 
             for j, chunk_text in enumerate(chunks):
+                if j >= MAX_CHUNKS_PER_ARTICLE:  # v17.1: cap para papers gigantes
+                    break
                 chunk_id = f"chunk_{title_hash}_{j}"
                 if chunk_id in seen_ids_in_batch:
                     continue

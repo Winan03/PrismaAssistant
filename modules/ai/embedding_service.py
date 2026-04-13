@@ -21,7 +21,7 @@ import config
 # ==============================================================================
 
 EMBEDDING_DIM = 768
-BATCH_SIZE = 20
+BATCH_SIZE = 64  # v17.1: Subido de 20 → 64 para reducir overhead de bucle CPU (3x menos iteraciones)
 
 # Cache en memoria para evitar llamadas repetidas al mismo texto
 _embedding_cache: dict = {}
