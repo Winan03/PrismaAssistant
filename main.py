@@ -396,8 +396,8 @@ def batch_pdf_downloader(articles: list, session_id: str):
 
     logging.info(f" 📥 Sincronizando {len(to_download)} artículos con PDF antes de mostrar resultados...")
     from concurrent.futures import ThreadPoolExecutor
-    # v15.4: Reducimos workers a 2 para ser respetuosos con ArXiv/ACM y evitar bans
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    # v17.0: 4 workers paralelos. El domain lock en pdf_extractor serializa por dominio, evitando bans.
+    with ThreadPoolExecutor(max_workers=4) as executor:
         list(executor.map(pdf_extractor.download_full_text_lazy, to_download))
     
     # Sincronizar con ChromaDB inmediatamente

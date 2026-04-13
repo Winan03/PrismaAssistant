@@ -3683,7 +3683,7 @@ def generate_synthesis_full(articles, question, metrics):
         #  V8.2: ENRIQUECIMIENTO MASIVO DE FULL TEXT (OPEN ACCESS) 
         # Descargar PDFs en paralelo para los artículos incluidos que lo necesiten
         from utils import pdf_extractor
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with ThreadPoolExecutor(max_workers=4) as executor:
             # Solo artículos con URL de PDF y que no tengan ya el texto descargado
             to_download = [a for a in articles if a.get('needs_pdf_download') and not a.get('is_pdf_downloaded')]
             if to_download:
