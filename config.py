@@ -99,10 +99,12 @@ VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY")
 MONGODB_URI = os.getenv("MONGODB_URI")
 ENABLE_MONGODB = os.getenv("ENABLE_MONGODB", "False").lower() == "true"
 MILVUS_URI = "chroma_db"
-MILVUS_COLLECTION = os.getenv("MILVUS_COLLECTION", "articles_collection_v3")
+MILVUS_COLLECTION = os.getenv("MILVUS_COLLECTION", "articles_collection_v5")  # v5: nueva dimensión 384
 
-EMBEDDING_MODEL = "all-mpnet-base-v2"
-EMBEDDING_DIM = 768
+# v17.3: Cambiado de all-mpnet-base-v2 (110M, 768-dim) a all-MiniLM-L6-v2 (22M, 384-dim)
+# Resultado: 5x más rápido en CPU. De ~12 min a ~2.5 min en el indexado inicial.
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+EMBEDDING_DIM = 384
 
 # ========================================
 # ✅ THRESHOLDS
