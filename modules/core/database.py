@@ -129,7 +129,7 @@ def is_pdf_real(text: str) -> bool:
 # ============================================================
 
 def ensure_collection():
-    """Asegura que la colección existe"""
+    """Asegura que la colección existe y tiene las dimensiones correctas."""
     global _chroma_collection
     
     if _chroma_collection is not None:
@@ -137,16 +137,36 @@ def ensure_collection():
     
     client = get_chroma_client()
     coll_name = config.MILVUS_COLLECTION
+    expected_dim = config.EMBEDDING_DIM
     
     try:
-        _chroma_collection = client.get_collection(name=coll_name)
-        logging.info(f"✅ Colección '{coll_name}' cargada")
-    except:
+        existing = client.get_collection(name=coll_name)
+        # v17.4: Verificar compatibilidad de dimensiones
+        # Si la colección fue creada con el modelo viejo (768-dim) pero ahora usamos 384-dim,
+        # hay que borrarla y recrearla para evitar el error 'dimension mismatch'
+        sample = existing.peek(limit=1)
+        if sample and sample.get("embeddings") and len(sample["embeddings"]) > 0:
+            actual_dim = len(sample["embeddings"][0])
+            if actual_dim != expected_dim:
+                logging.warning(
+                    f"⚠️ Colección '{coll_name}' tiene dimensión {actual_dim} pero el modelo produce {expected_dim}. "
+                    f"Recreando colección con dimensión correcta..."
+                )
+                client.delete_collection(name=coll_name)
+                _chroma_collection = client.create_collection(
+                    name=coll_name,
+                    metadata={"hnsw:space": "cosine"}
+                )
+                logging.info(f"✅ Colección '{coll_name}' recreada con dimensión {expected_dim}")
+                return _chroma_collection
+        _chroma_collection = existing
+        logging.info(f"✅ Colección '{coll_name}' cargada (dim={expected_dim})")
+    except Exception:
         _chroma_collection = client.create_collection(
             name=coll_name,
             metadata={"hnsw:space": "cosine"}
         )
-        logging.info(f"✅ Colección '{coll_name}' creada")
+        logging.info(f"✅ Colección '{coll_name}' creada (dim={expected_dim})")
     
     return _chroma_collection
 

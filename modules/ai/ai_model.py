@@ -59,23 +59,31 @@ PROVIDERS_CONFIG = {
     },
     Provider.GEMMA_27B: {
         "name": "Google Gemma 3 27B",
-        "endpoint": config.GEMINI_ENDPOINT,  # Mismo endpoint que Gemini
-        "model": "gemma-3-27b-it",
-        "api_key_getter": lambda: config.GEMINI_API_KEYS,
-        "multi_key": True,
-        "timeout": 120,
+        # v17.4: Gemma no es compatible con endpoint /v1beta/openai/ — usar OpenRouter
+        "endpoint": config.OPENROUTER_BASE_URL,
+        "model": "google/gemma-3-27b-it:free",
+        "api_key_getter": lambda: config.OPENROUTER_API_KEY,
+        "timeout": 60,
         "max_tokens_default": 8192,
-        "max_input_chars": 200000,  # Gemma 3 27B soporta 128K contexto
+        "max_input_chars": 100000,
+        "extra_headers": {
+            "HTTP-Referer": "https://prisma-assistant.local",
+            "X-Title": "PRISMA Assistant RSL",
+        },
     },
     Provider.GEMMA_12B: {
         "name": "Google Gemma 3 12B",
-        "endpoint": config.GEMINI_ENDPOINT,  # Mismo endpoint que Gemini
-        "model": "gemma-3-12b-it",
-        "api_key_getter": lambda: config.GEMINI_API_KEYS,
-        "multi_key": True,
-        "timeout": 120,
+        # v17.4: Gemma no es compatible con endpoint /v1beta/openai/ — usar OpenRouter
+        "endpoint": config.OPENROUTER_BASE_URL,
+        "model": "google/gemma-3-12b-it:free",
+        "api_key_getter": lambda: config.OPENROUTER_API_KEY,
+        "timeout": 60,
         "max_tokens_default": 8192,
-        "max_input_chars": 200000,  # Gemma 3 12B soporta 128K contexto
+        "max_input_chars": 100000,
+        "extra_headers": {
+            "HTTP-Referer": "https://prisma-assistant.local",
+            "X-Title": "PRISMA Assistant RSL",
+        },
     },
     Provider.CEREBRAS: {
         "name": "Cerebras Cloud",
@@ -140,7 +148,7 @@ PROVIDERS_CONFIG = {
     },
 }
 
-# Orden v16.3: Gemma 3 27B (14.4K RPD) → Gemma 3 12B → Cerebras → Groq → Gemini (fallback) → OpenRouter → HuggingFace
+# v17.4: Gemma 27B/12B via OpenRouter (primeros) → Cerebras → Groq → Gemini → GitHub → HuggingFace
 PROVIDER_ORDER = [Provider.GEMMA_27B, Provider.GEMMA_12B, Provider.CEREBRAS, Provider.GROQ, Provider.GEMINI, Provider.GITHUB_GPT4O, Provider.OPENROUTER, Provider.GITHUB, Provider.HUGGINGFACE]
 
 # ==============================================================================
