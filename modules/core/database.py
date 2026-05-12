@@ -129,7 +129,11 @@ def is_pdf_real(text: str) -> bool:
 # ============================================================
 
 def ensure_collection():
-    """Asegura que la colección existe y tiene las dimensiones correctas."""
+    """
+    Asegura que la colección existe y tiene las dimensiones correctas.
+    v18.0: Fix robusto para VPS — verifica dimensiones con test-upsert cuando
+    peek() no retorna embeddings (colección vacía o con embeddings no incluidos).
+    """
     global _chroma_collection
     
     if _chroma_collection is not None:
@@ -139,29 +143,69 @@ def ensure_collection():
     coll_name = config.MILVUS_COLLECTION
     expected_dim = config.EMBEDDING_DIM
     
+    def _delete_and_recreate(reason: str):
+        """Helper para borrar y recrear la colección limpiamente."""
+        logging.warning(f"⚠️ {reason}. Recreando colección '{coll_name}' con dim={expected_dim}...")
+        try:
+            client.delete_collection(name=coll_name)
+        except Exception:
+            pass
+        coll = client.create_collection(
+            name=coll_name,
+            metadata={"hnsw:space": "cosine"}
+        )
+        logging.info(f"✅ Colección '{coll_name}' recreada (dim={expected_dim})")
+        return coll
+
     try:
         existing = client.get_collection(name=coll_name)
-        # v17.4: Verificar compatibilidad de dimensiones
-        # Si la colección fue creada con el modelo viejo (768-dim) pero ahora usamos 384-dim,
-        # hay que borrarla y recrearla para evitar el error 'dimension mismatch'
+
+        # --- Intento 1: verificar vía peek() ---
         sample = existing.peek(limit=1)
         if sample and sample.get("embeddings") and len(sample["embeddings"]) > 0:
             actual_dim = len(sample["embeddings"][0])
             if actual_dim != expected_dim:
-                logging.warning(
-                    f"⚠️ Colección '{coll_name}' tiene dimensión {actual_dim} pero el modelo produce {expected_dim}. "
-                    f"Recreando colección con dimensión correcta..."
+                _chroma_collection = _delete_and_recreate(
+                    f"Colección tiene dim={actual_dim}, modelo produce dim={expected_dim}"
                 )
-                client.delete_collection(name=coll_name)
-                _chroma_collection = client.create_collection(
-                    name=coll_name,
-                    metadata={"hnsw:space": "cosine"}
-                )
-                logging.info(f"✅ Colección '{coll_name}' recreada con dimensión {expected_dim}")
                 return _chroma_collection
-        _chroma_collection = existing
-        logging.info(f"✅ Colección '{coll_name}' cargada (dim={expected_dim})")
+            # Dimensiones OK
+            _chroma_collection = existing
+            logging.info(f"✅ Colección '{coll_name}' cargada (dim verificada={expected_dim})")
+            return _chroma_collection
+
+        # --- Intento 2: peek() vino vacío — hacer test-upsert para verificar dimensión ---
+        # Esto ocurre cuando la colección existe pero fue creada con include=[] o está vacía.
+        logging.info(f"🔍 peek() sin embeddings — verificando dimensión con test-upsert...")
+        _TEST_ID = "__dim_check_probe__"
+        test_vector = [0.0] * expected_dim
+        try:
+            existing.upsert(
+                ids=[_TEST_ID],
+                embeddings=[test_vector],
+                documents=["probe"],
+                metadatas=[{"probe": "true"}]
+            )
+            # Si llegó aquí sin error, la colección acepta la dimensión correcta — limpiar probe
+            try:
+                existing.delete(ids=[_TEST_ID])
+            except Exception:
+                pass
+            _chroma_collection = existing
+            logging.info(f"✅ Colección '{coll_name}' compatible con dim={expected_dim} (test-upsert OK)")
+        except Exception as probe_err:
+            probe_msg = str(probe_err)
+            if "dimension" in probe_msg.lower() or "dimensionality" in probe_msg.lower():
+                _chroma_collection = _delete_and_recreate(
+                    f"Test-upsert reveló incompatibilidad de dimensión: {probe_msg[:120]}"
+                )
+            else:
+                # Error desconocido en el probe — aceptar la colección de todas formas
+                logging.warning(f"⚠️ Test-upsert falló con error no-dimensional: {probe_msg[:120]}. Aceptando colección.")
+                _chroma_collection = existing
+
     except Exception:
+        # La colección no existe — crearla
         _chroma_collection = client.create_collection(
             name=coll_name,
             metadata={"hnsw:space": "cosine"}

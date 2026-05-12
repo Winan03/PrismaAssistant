@@ -384,7 +384,7 @@ class LocalModel:
         
         # v16.3: Gemma no soporta rol "system" — fusionar con el mensaje de usuario
         selected_model = override_model if override_model else cfg["model"]
-        is_gemma = selected_model.startswith("gemma")
+        is_gemma = "gemma" in selected_model.lower()  # v18.0: fix OpenRouter usa google/gemma-* format
         
         default_system = "Eres un investigador científico senior especializado en revisiones sistemáticas (RSL). Tu mandato absoluto es responder SIEMPRE en ESPAÑOL, incluso si el material de origen o los fragmentos de texto están en inglés u otros idiomas. Tu salida debe ser profesional, académica y 100% en español."
         effective_system = system_prompt if system_prompt else default_system
