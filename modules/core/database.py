@@ -15,6 +15,14 @@ from modules.logic.screening import get_embedding
 
 logging.basicConfig(level=logging.INFO)
 
+# Silenciar ruido de telemetría interna de ChromaDB (bug conocido en versiones <0.5)
+# capture() recibe demasiados args porque anonymized_telemetry=False ya está configurado
+class _ChromaTelemetryFilter(logging.Filter):
+    def filter(self, record):
+        return "Failed to send telemetry event" not in record.getMessage()
+
+logging.getLogger().addFilter(_ChromaTelemetryFilter())
+
 # ==========================
 # MongoDB Atlas (OPCIONAL)
 # ==========================

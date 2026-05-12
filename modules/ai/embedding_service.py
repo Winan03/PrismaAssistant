@@ -1,13 +1,13 @@
 """
-embedding_service.py - Servicio de Embeddings Unificado (v4.0)
+embedding_service.py - Servicio de Embeddings Unificado (v4.1)
 
 Estrategia para produccion (local-first):
-  1. PRIMARIO: SentenceTransformer local (all-mpnet-base-v2)
-     - En HF Spaces Docker: descarga ~420MB la primera vez, luego queda en cache
-     - En produccion con 16GB RAM: funciona perfectamente
+  1. PRIMARIO: SentenceTransformer local (all-MiniLM-L6-v2)
+     - En HF Spaces Docker: descarga ~90MB la primera vez, luego queda en cache
+     - Rapido en CPU, 384 dims
   2. APIS opcionales: Voyage AI / HuggingFace (si se configuran y el local falla)
 
-768 dims -> ChromaDB compatible.
+384 dims -> ChromaDB compatible.
 """
 
 import logging
@@ -36,7 +36,7 @@ _local_model = None
 def get_embeddings(texts: Union[str, List[str]], use_cache: bool = True) -> np.ndarray:
     """
     Genera embeddings para uno o mas textos.
-    Returns: np.ndarray shape (n_texts, 768).
+    Returns: np.ndarray shape (n_texts, EMBEDDING_DIM).
     """
     if isinstance(texts, str):
         texts = [texts]
@@ -81,7 +81,7 @@ def get_embeddings(texts: Union[str, List[str]], use_cache: bool = True) -> np.n
 
 
 def get_single_embedding(text: str) -> np.ndarray:
-    """Embedding de un texto unico como vector 1D (768,)."""
+    """Embedding de un texto unico como vector 1D (EMBEDDING_DIM,)."""
     return get_embeddings([text])[0]
 
 
@@ -103,7 +103,10 @@ def _get_embeddings_local(texts: List[str]) -> np.ndarray:
         if _local_model is None:
             logging.info(f"Cargando modelo de embeddings: {config.EMBEDDING_MODEL}...")
             _local_model = SentenceTransformer(config.EMBEDDING_MODEL)
-            logging.info(f"Modelo cargado: {config.EMBEDDING_MODEL} (768 dims)")
+            actual_dim = _local_model.get_sentence_embedding_dimension()
+            logging.info(f"Modelo cargado: {config.EMBEDDING_MODEL} ({actual_dim} dims) | Config espera: {EMBEDDING_DIM} dims")
+            if actual_dim != EMBEDDING_DIM:
+                logging.warning(f"⚠️ DIMENSION MISMATCH: modelo={actual_dim}, config={EMBEDDING_DIM}. Verificar config.EMBEDDING_DIM.")
 
         embeddings = _local_model.encode(
             texts,
