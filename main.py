@@ -5,9 +5,13 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 # ============================================================
-# 🚨 FIX CRÍTICO DE ESPACIO EN DISCO (C: LLENO)
+# CACHE DE MODELOS: Windows → D:/AI_MODELS_CACHE | Linux/VPS → /app/.cache/models
 # ============================================================
-CACHE_ROOT = "D:/AI_MODELS_CACHE"
+if os.name == 'nt':  # Windows
+    CACHE_ROOT = "D:/AI_MODELS_CACHE"
+else:  # Linux (VPS Docker)
+    CACHE_ROOT = os.getenv("CACHE_ROOT", "/app/.cache/models")
+
 os.makedirs(f"{CACHE_ROOT}/huggingface", exist_ok=True)
 os.makedirs(f"{CACHE_ROOT}/sentence_transformers", exist_ok=True)
 os.makedirs(f"{CACHE_ROOT}/llama_index", exist_ok=True)
@@ -270,12 +274,17 @@ def normalize_article_for_csv(article: Dict, ai_fields: List[str] = None) -> Dic
     
     return article
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint para Docker y monitoreo externo."""
+    return {"status": "ok", "service": "prisma-assistant"}
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/search", response_class=HTMLResponse)
-async def initial_search(request: Request, question: str = Form(...)):
+async def initial_search(request: Request, background_tasks: BackgroundTasks, question: str = Form(...)):
     start = time.perf_counter()
     logging.info(f"📝 Nueva Búsqueda: {question}")
 
@@ -287,7 +296,9 @@ async def initial_search(request: Request, question: str = Form(...)):
     
     articles = [normalize_article_for_csv(a) for a in articles]
 
-    database.save_to_milvus(articles)
+    # v17.2: Embedding en BACKGROUND — no bloquear al usuario durante 12+ min
+    # Los abstractos se sobreescriben de todas formas cuando se descargan los PDFs reales.
+    background_tasks.add_task(database.save_to_milvus, articles)
     export_to_csv(articles, "log_0_initial_search.csv")
     
     # 🔥 v6: Evaluación Automática de Calidad (Initial Search)

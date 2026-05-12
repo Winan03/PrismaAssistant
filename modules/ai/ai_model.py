@@ -149,7 +149,9 @@ PROVIDERS_CONFIG = {
 }
 
 # v17.4: Gemma 27B/12B via OpenRouter (primeros) → Cerebras → Groq → Gemini → GitHub → HuggingFace
-PROVIDER_ORDER = [Provider.GEMMA_27B, Provider.GEMMA_12B, Provider.CEREBRAS, Provider.GROQ, Provider.GEMINI, Provider.GITHUB_GPT4O, Provider.OPENROUTER, Provider.GITHUB, Provider.HUGGINGFACE]
+# v18.1: Gemma movida al final — google/gemma-3-*-it:free no tiene endpoints activos en OpenRouter.
+# Cerebras (Llama 3.1 8B) es mas rapido y confiable como primer provider.
+PROVIDER_ORDER = [Provider.CEREBRAS, Provider.GROQ, Provider.GEMINI, Provider.GITHUB_GPT4O, Provider.OPENROUTER, Provider.GITHUB, Provider.HUGGINGFACE, Provider.GEMMA_27B, Provider.GEMMA_12B]
 
 # ==============================================================================
 # CLASE PRINCIPAL
