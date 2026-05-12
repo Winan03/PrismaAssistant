@@ -12,9 +12,14 @@ Estrategia para produccion (local-first):
 
 import logging
 import time
+import os
 import numpy as np
 from typing import List, Union
 import config
+
+# Deshabilitar telemetria de ChromaDB ANTES de importarlo
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
+os.environ.setdefault("CHROMA_TELEMETRY", "False")
 
 # ==============================================================================
 # CONFIGURACION

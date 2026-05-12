@@ -1,13 +1,8 @@
-"""
-1. Guarda texto completo del PDF en ChromaDB (no solo 1000 chars)
-2. Añade campo 'full_text_length' para debugging
-3. Mejor manejo de errores
-"""
+import logging
 from pymongo import MongoClient
 import chromadb
 from chromadb.config import Settings
 import config
-import logging
 import os
 import re
 import hashlib
@@ -15,13 +10,21 @@ from modules.logic.screening import get_embedding
 
 logging.basicConfig(level=logging.INFO)
 
-# Silenciar ruido de telemetría interna de ChromaDB (bug conocido en versiones <0.5)
-# capture() recibe demasiados args porque anonymized_telemetry=False ya está configurado
+# Silenciar telemetría interna de ChromaDB
+# Método 1: Nivel CRITICAL en el logger específico de chromadb telemetry
+logging.getLogger("chromadb.telemetry").setLevel(logging.CRITICAL)
+logging.getLogger("chromadb.telemetry.product_telemetry").setLevel(logging.CRITICAL)
+
+# Método 2: Filtro en los handlers del root (ChromaDB propaga a handlers, no al logger)
 class _ChromaTelemetryFilter(logging.Filter):
     def filter(self, record):
         return "Failed to send telemetry event" not in record.getMessage()
 
-logging.getLogger().addFilter(_ChromaTelemetryFilter())
+_telem_filter = _ChromaTelemetryFilter()
+for _h in logging.root.handlers:
+    _h.addFilter(_telem_filter)
+# También al root logger por si se agregan handlers luego
+logging.getLogger().addFilter(_telem_filter)
 
 # ==========================
 # MongoDB Atlas (OPCIONAL)
