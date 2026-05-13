@@ -352,7 +352,10 @@ async def initial_search(request: Request, background_tasks: BackgroundTasks, qu
         "year_min": y_min,
         "year_max": y_max,
         "languages": languages_list,
-        "all_journals": [{"name": k, "count": v} for k, v in journals.most_common(20)]
+        "all_journals": [{"name": k, "count": v} for k, v in journals.most_common(20)],
+        # Pre-cargar criterios I/E si el usuario vuelve a la vista de filtros
+        "session_inclusion_criteria": session_data.get("last_inclusion_criteria", ""),
+        "session_exclusion_criteria": session_data.get("last_exclusion_criteria", ""),
     })
 
 @app.post("/update_filter_count", response_class=JSONResponse)

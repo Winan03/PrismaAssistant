@@ -110,20 +110,59 @@
     .criteria-toggle-label i { color: var(--primary); }
     .criteria-toggle-badge { font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 8px; background: #f0fdf4; color: var(--primary); border: 1px solid #a7f3d0; }
     .criteria-toggle-chevron { color: var(--text-muted); transition: transform 0.25s; font-size: 0.75rem; }
-    .criteria-body { overflow: hidden; max-height: 0; transition: max-height 0.35s ease, opacity 0.25s ease; opacity: 0; }
-    .criteria-body.open { max-height: 600px; opacity: 1; }
-    .criteria-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 14px; }
-    .criteria-col h4 { font-size: 0.78rem; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .criteria-body { overflow: hidden; max-height: 0; transition: max-height 0.4s ease, opacity 0.3s ease; opacity: 0; }
+    .criteria-body.open { max-height: 900px; opacity: 1; }
+    .criteria-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding-top: 14px; }
+    .criteria-col h4 { font-size: 0.78rem; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
     .criteria-col h4.inc { color: #059669; }
     .criteria-col h4.exc { color: #dc2626; }
-    .criteria-textarea {
-      width: 100%; border: 2px solid var(--border); border-radius: 10px; padding: 10px 12px;
-      font-family: inherit; font-size: 0.78rem; line-height: 1.6; color: var(--text);
-      resize: vertical; min-height: 100px; outline: none; transition: border-color 0.2s;
-      background: #fafbfc;
+    .criteria-hint { font-size: 0.68rem; color: var(--text-muted); margin-top: 8px; line-height: 1.4; }
+    /* Tag-chip box */
+    .tag-input-box {
+      border: 2px solid var(--border); border-radius: 12px; padding: 8px 10px;
+      background: #fafbfc; min-height: 80px; display: flex; flex-direction: column; gap: 8px;
+      transition: border-color 0.2s;
     }
-    .criteria-textarea:focus { border-color: var(--primary-light); background: #fff; }
-    .criteria-hint { font-size: 0.68rem; color: var(--text-muted); margin-top: 5px; line-height: 1.4; }
+    .tag-input-box:focus-within { border-color: var(--primary-light); background: #fff; }
+    .tag-input-box.inc-box:focus-within { border-color: #059669; }
+    .tag-input-box.exc-box:focus-within { border-color: #dc2626; }
+    .tags-container { display: flex; flex-wrap: wrap; gap: 6px; min-height: 10px; }
+    .tag-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px 4px 12px; border-radius: 20px;
+      font-size: 0.72rem; font-weight: 600; line-height: 1.3;
+      animation: chipIn 0.18s ease;
+    }
+    @keyframes chipIn { from { opacity:0; transform:scale(0.85); } to { opacity:1; transform:scale(1); } }
+    .tag-chip.inc { background: #ecfdf5; color: #065f46; border: 1.5px solid #6ee7b7; }
+    .tag-chip.exc { background: #fef2f2; color: #991b1b; border: 1.5px solid #fca5a5; }
+    .tag-chip-remove {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px; border-radius: 50%; cursor: pointer;
+      font-size: 0.65rem; font-weight: 700; border: none; padding: 0;
+      flex-shrink: 0; transition: background 0.15s;
+    }
+    .tag-chip.inc .tag-chip-remove { background: #a7f3d0; color: #065f46; }
+    .tag-chip.inc .tag-chip-remove:hover { background: #6ee7b7; }
+    .tag-chip.exc .tag-chip-remove { background: #fecaca; color: #991b1b; }
+    .tag-chip.exc .tag-chip-remove:hover { background: #fca5a5; }
+    .tag-input-row { display: flex; gap: 6px; align-items: center; }
+    .tag-text-input {
+      flex: 1; border: none; background: transparent; outline: none;
+      font-family: inherit; font-size: 0.78rem; color: var(--text);
+      padding: 4px 0;
+    }
+    .tag-text-input::placeholder { color: #94a3b8; }
+    .tag-add-btn {
+      width: 26px; height: 26px; border-radius: 8px; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 700; flex-shrink: 0; transition: background 0.15s;
+    }
+    .inc-box .tag-add-btn { background: #d1fae5; color: #059669; }
+    .inc-box .tag-add-btn:hover { background: #a7f3d0; }
+    .exc-box .tag-add-btn { background: #fee2e2; color: #dc2626; }
+    .exc-box .tag-add-btn:hover { background: #fecaca; }
+    .tag-empty-msg { font-size: 0.7rem; color: #94a3b8; padding: 4px 2px; font-style: italic; }
 
     /* ── Toggle Switch ── */
     .toggle-row {
@@ -334,35 +373,45 @@
         </div>
         <div class="criteria-body" id="criteria-body">
           <p style="font-size:0.75rem;color:var(--text-muted);line-height:1.5;margin-bottom:4px">
-            Define criterios para orientar el cribado semántico. El sistema los usará para
-            enriquecer la búsqueda vectorial y mejorar el ranking del
-            <strong>Top 100</strong> resultante. Un criterio por línea.
+            Escribe un criterio y presiona <kbd style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:1px 5px;font-size:0.68rem">Enter</kbd>
+            o <kbd style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:1px 5px;font-size:0.68rem">+</kbd>
+            para agregarlo. El sistema los usará para enriquecer el ranking del <strong>Top 100</strong>.
           </p>
+          <!-- Hidden textareas para el submit del form -->
+          <textarea name="inclusion_criteria" id="inclusion_criteria" style="display:none"></textarea>
+          <textarea name="exclusion_criteria" id="exclusion_criteria" style="display:none"></textarea>
+
           <div class="criteria-grid">
+            <!-- Inclusión -->
             <div class="criteria-col">
               <h4 class="inc"><i class="fas fa-circle-check"></i> Criterios de Inclusión</h4>
-              <textarea
-                name="inclusion_criteria"
-                id="inclusion_criteria"
-                class="criteria-textarea"
-                placeholder="Ejemplo:
-Estudios experimentales o cuasi-experimentales
-Publicados en revistas indexadas
-Relacionados con IA en pruebas de software"
-              ></textarea>
+              <div class="tag-input-box inc-box" id="inc-box">
+                <div class="tags-container" id="inc-chips">
+                  <span class="tag-empty-msg" id="inc-empty">Sin criterios añadidos aún…</span>
+                </div>
+                <div class="tag-input-row">
+                  <input type="text" class="tag-text-input" id="inc-input"
+                    placeholder="Ej: Estudios con resultados experimentales"
+                    onkeydown="handleChipKey(event,'inc')">
+                  <button type="button" class="tag-add-btn" onclick="addChip('inc')" title="Agregar criterio">+</button>
+                </div>
+              </div>
               <p class="criteria-hint"><i class="fas fa-circle-info"></i> Los artículos que cumplan estos criterios serán priorizados en el ranking semántico.</p>
             </div>
+            <!-- Exclusión -->
             <div class="criteria-col">
               <h4 class="exc"><i class="fas fa-circle-xmark"></i> Criterios de Exclusión</h4>
-              <textarea
-                name="exclusion_criteria"
-                id="exclusion_criteria"
-                class="criteria-textarea"
-                placeholder="Ejemplo:
-Artículos de opinión sin metodología
-Duplicados o revisiones de libros
-Fuera del rango temporal de interés"
-              ></textarea>
+              <div class="tag-input-box exc-box" id="exc-box">
+                <div class="tags-container" id="exc-chips">
+                  <span class="tag-empty-msg" id="exc-empty">Sin criterios añadidos aún…</span>
+                </div>
+                <div class="tag-input-row">
+                  <input type="text" class="tag-text-input" id="exc-input"
+                    placeholder="Ej: Solo revisión bibliográfica sin experimento"
+                    onkeydown="handleChipKey(event,'exc')">
+                  <button type="button" class="tag-add-btn" onclick="addChip('exc')" title="Agregar criterio">+</button>
+                </div>
+              </div>
               <p class="criteria-hint"><i class="fas fa-circle-info"></i> Las palabras clave de estos criterios se usarán como malus en el scoring semántico.</p>
             </div>
           </div>
@@ -405,6 +454,76 @@ Fuera del rango temporal de interés"
       const isOpen = body.classList.toggle('open');
       chevron.style.transform = isOpen ? 'rotate(180deg)' : '';
     }
+
+    // ══════════════════════════════════════════
+    // TAG-CHIP INPUT SYSTEM
+    // ══════════════════════════════════════════
+    const chipState = { inc: [], exc: [] };
+
+    function handleChipKey(e, type) {
+      if (e.key === 'Enter') { e.preventDefault(); addChip(type); }
+    }
+
+    function addChip(type) {
+      const input = document.getElementById(`${type}-input`);
+      const text = input.value.trim();
+      if (!text || chipState[type].includes(text)) { input.value = ''; return; }
+      chipState[type].push(text);
+      input.value = '';
+      renderChips(type);
+      syncHiddenTextarea(type);
+    }
+
+    function removeChip(type, index) {
+      chipState[type].splice(index, 1);
+      renderChips(type);
+      syncHiddenTextarea(type);
+    }
+
+    function renderChips(type) {
+      const container = document.getElementById(`${type}-chips`);
+      const emptyMsg = document.getElementById(`${type}-empty`);
+      const chips = chipState[type];
+      // Clear current chips (keep empty msg)
+      container.innerHTML = '';
+      if (chips.length === 0) {
+        emptyMsg.style.display = '';
+        container.appendChild(emptyMsg);
+        return;
+      }
+      emptyMsg.style.display = 'none';
+      chips.forEach((text, i) => {
+        const chip = document.createElement('span');
+        chip.className = `tag-chip ${type}`;
+        chip.innerHTML = `<span>${escapeHtml(text)}</span><button type="button" class="tag-chip-remove" onclick="removeChip('${type}', ${i})" title="Eliminar">✕</button>`;
+        container.appendChild(chip);
+      });
+    }
+
+    function syncHiddenTextarea(type) {
+      const ta = document.getElementById(type === 'inc' ? 'inclusion_criteria' : 'exclusion_criteria');
+      ta.value = chipState[type].join('\n');
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // Pre-cargar chips desde sesión si existen
+    (function preloadChips() {
+      const prevInc = {{ (session_inclusion_criteria or '') | tojson }};
+      const prevExc = {{ (session_exclusion_criteria or '') | tojson }};
+      if (prevInc) {
+        prevInc.split('\n').filter(l => l.trim()).forEach(l => { chipState.inc.push(l.trim()); });
+        renderChips('inc'); syncHiddenTextarea('inc');
+      }
+      if (prevExc) {
+        prevExc.split('\n').filter(l => l.trim()).forEach(l => { chipState.exc.push(l.trim()); });
+        renderChips('exc'); syncHiddenTextarea('exc');
+        // Auto-abrir si hay criterios pre-cargados
+        if (chipState.inc.length > 0 || chipState.exc.length > 0) toggleCriteria();
+      }
+    })();
 
     // ── Chip toggle ──
     document.querySelectorAll('.chip').forEach(chip => {

@@ -313,6 +313,89 @@ def get_adaptive_threshold(scores: List[float], target_n: int = 50, min_threshol
     logging.info(f"🎯 Umbral Adaptativo: {final_thresh:.2f} (Target N={target_n}, Suelo={min_threshold})")
     return final_thresh
 
+
+# ============================================================
+# LOGICA FUZZY MAMDANI (v1.0) - Sin dependencias externas
+# ============================================================
+
+def _trap(x: float, a: float, b: float, c: float, d: float) -> float:
+    """Función de pertenencia trapezoidal: sube de a->b, plano b->c, baja c->d."""
+    if x <= a or x >= d:
+        return 0.0
+    elif x <= b:
+        return (x - a) / (b - a) if b > a else 1.0
+    elif x <= c:
+        return 1.0
+    else:
+        return (d - x) / (d - c) if d > c else 1.0
+
+def _tri(x: float, a: float, b: float, c: float) -> float:
+    """Función de pertenencia triangular: sube a->b, baja b->c."""
+    if x <= a or x >= c:
+        return 0.0
+    elif x <= b:
+        return (x - a) / (b - a) if b > a else 1.0
+    else:
+        return (c - x) / (c - b) if c > b else 1.0
+
+
+def compute_fuzzy_score(semantic_sim: float, domain_rel: float, kw_boost_raw: float) -> float:
+    """
+    Inferencia Fuzzy Mamdani sobre 3 variables de entrada.
+    Reduce falsos positivos: artículos con alta similitud semántica
+    pero baja relevancia de dominio reciben un score final más bajo.
+
+    Variables de entrada:
+      - semantic_sim  : similitud coseno normalizada [0, 1]
+      - domain_rel    : relevancia de dominio [0, 1]
+      - kw_boost_raw  : boost de keywords (antes de escalar, [0, ~0.4])
+
+    Salida: score difuso de relevancia [0, 1]
+    """
+    # Normalizar kw_boost al rango [0,1] (máx estimado ~0.20 según pipeline)
+    kw = min(kw_boost_raw / 0.20, 1.0)
+
+    # ── FUNCIONES DE PERTENENCIA: Similitud Semántica ──
+    sim_low    = _trap(semantic_sim,  0.0,  0.0,  0.25, 0.45)
+    sim_medium = _tri( semantic_sim,  0.30, 0.55, 0.75)
+    sim_high   = _trap(semantic_sim,  0.60, 0.80, 1.0,  1.0)
+
+    # ── FUNCIONES DE PERTENENCIA: Relevancia de Dominio ──
+    dom_low    = _trap(domain_rel,    0.0,  0.0,  0.25, 0.45)
+    dom_high   = _trap(domain_rel,    0.35, 0.60, 1.0,  1.0)
+
+    # ── FUNCIONES DE PERTENENCIA: Keyword Boost ──
+    kw_low     = _trap(kw,            0.0,  0.0,  0.20, 0.40)
+    kw_high    = _trap(kw,            0.30, 0.55, 1.0,  1.0)
+
+    # ── REGLAS MAMDANI (activación = min de antecedentes) ──
+    # Cada regla produce: (activación, valor_crisp_de_salida)
+    rules = [
+        # R1: sim_alta + dom_alta + kw_alta  → Muy Relevante
+        (min(sim_high, dom_high, kw_high),   0.92),
+        # R2: sim_alta + dom_alta             → Relevante
+        (min(sim_high, dom_high),             0.78),
+        # R3: sim_alta + dom_baja             → Medio (falso positivo vectorial)
+        (min(sim_high, dom_low),              0.50),
+        # R4: sim_media + dom_alta + kw_alta  → Relevante
+        (min(sim_medium, dom_high, kw_high),  0.75),
+        # R5: sim_media + dom_alta            → Medio-alto
+        (min(sim_medium, dom_high),           0.58),
+        # R6: sim_media + dom_baja            → Bajo
+        (min(sim_medium, dom_low),            0.30),
+        # R7: sim_baja                        → No relevante
+        (sim_low,                             0.08),
+    ]
+
+    # ── DEFUZZIFICACIÓN: Centroide Ponderado ──
+    numerator   = sum(act * val for act, val in rules)
+    denominator = sum(act       for act, _   in rules)
+
+    if denominator < 1e-9:
+        return semantic_sim  # fallback: devolver similitud raw
+
+    return numerator / denominator
+
 def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
                     max_results: int = 50, original_question: str = "",
                     inclusion_criteria: str = "", exclusion_criteria: str = "") -> List[Dict]:
@@ -427,25 +510,33 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
             exclusion_malus = 0.0
             for term in exclusion_terms:
                 if term.lower() in content_lower:
-                    exclusion_malus -= 0.15  # v7.8: Malus balanceado (v7.2 stable)
-            
-            domain_bonus = exclusion_malus
+                    exclusion_malus -= 0.15
 
             # --- CAPA 2: KEYWORD BOOST CON COMPARACIÓN (v7.0) ---
-            kw_boost = compute_keyword_boost(art, english_terms, semantic_queries, comparison_poles) * 0.20 
-            
-            # Score Final Combinado
-            final_score = rel_val + domain_bonus + kw_boost
-            
-            # Asegurar rango [0, 1]
-            final_score = min(max(final_score, 0.0), 1.0)
+            kw_boost = compute_keyword_boost(art, english_terms, semantic_queries, comparison_poles) * 0.20
 
-            art['similarity'] = final_score
-            art['raw_similarity'] = raw_val
-            art['domain_relevance'] = compute_domain_relevance(art, domain_keywords, semantic_queries)
-            
+            # --- CAPA 3: LOGICA FUZZY MAMDANI (v1.0) ---
+            domain_rel_val = compute_domain_relevance(art, domain_keywords, semantic_queries)
+            fuzzy_val = compute_fuzzy_score(raw_val, domain_rel_val, kw_boost)
+
+            # Score híbrido: 60% fuzzy (multidimensional) + 40% similitud normalizada (fidelidad vectorial)
+            # El exclusion_malus se aplica sobre el score combinado
+            hybrid_score = (fuzzy_val * 0.6) + (rel_val * 0.4) + exclusion_malus
+
+            # Asegurar rango [0, 1]
+            final_score = min(max(hybrid_score, 0.0), 1.0)
+
+            art['similarity']      = final_score
+            art['raw_similarity']  = raw_val
+            art['domain_relevance'] = domain_rel_val
+            art['fuzzy_score']     = fuzzy_val
+
             if i < 5:
-                logging.info(f"🔍 [SCREENING] Art '{art.get('title', '')[:40]}...': raw={raw_val:.3f}, final_rel={final_score:.3f}, kw_boost={kw_boost:.2f}")
+                logging.info(
+                    f"🔷 [FUZZY] Art '{art.get('title', '')[:38]}...': "
+                    f"raw={raw_val:.3f}, dom={domain_rel_val:.2f}, kw={kw_boost:.2f} "
+                    f"→ fuzzy={fuzzy_val:.3f}, hybrid={final_score:.3f}"
+                )
 
     except Exception as e:
         logging.error(f"❌ Error critico en screening: {e}")
