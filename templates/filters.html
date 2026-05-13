@@ -482,21 +482,30 @@
 
     function renderChips(type) {
       const container = document.getElementById(`${type}-chips`);
-      const emptyMsg = document.getElementById(`${type}-empty`);
       const chips = chipState[type];
-      // Clear current chips (keep empty msg)
-      container.innerHTML = '';
-      if (chips.length === 0) {
-        emptyMsg.style.display = '';
-        container.appendChild(emptyMsg);
-        return;
-      }
-      emptyMsg.style.display = 'none';
+
+      // FIX: Eliminar SOLO los .tag-chip — nunca usar innerHTML='' porque
+      // eso desconecta emptyMsg del DOM y getElementById devuelve null despues
+      container.querySelectorAll('.tag-chip').forEach(el => el.remove());
+
+      // emptyMsg siempre permanece en el DOM, solo se muestra/oculta
+      const emptyMsg = container.querySelector('.tag-empty-msg');
+      if (emptyMsg) emptyMsg.style.display = chips.length === 0 ? '' : 'none';
+
       chips.forEach((text, i) => {
         const chip = document.createElement('span');
         chip.className = `tag-chip ${type}`;
-        chip.innerHTML = `<span>${escapeHtml(text)}</span><button type="button" class="tag-chip-remove" onclick="removeChip('${type}', ${i})" title="Eliminar">✕</button>`;
-        container.appendChild(chip);
+        chip.innerHTML = `<span>${escapeHtml(text)}</span>` +
+          `<button type="button" class="tag-chip-remove" data-type="${type}" data-index="${i}" title="Eliminar">&#x2715;</button>`;
+        // Insertar ANTES del emptyMsg para mantener orden correcto
+        container.insertBefore(chip, emptyMsg || null);
+      });
+
+      // Usar data-attributes en vez de onclick inline para evitar desincronias de indices
+      container.querySelectorAll('.tag-chip-remove').forEach(btn => {
+        btn.onclick = function() {
+          removeChip(this.dataset.type, parseInt(this.dataset.index));
+        };
       });
     }
 
