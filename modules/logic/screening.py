@@ -486,17 +486,14 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
         
         max_raw = np.max(final_raw_scores)
         
-        # --- FILTRO RAW ADAPTATIVO (Fix v5.2) ---
-        # Corpus más grande -> más ruido -> filtro más estricto
+        # --- UMBRAL MiNIMO DE CALIDAD (muy permisivo) ---
+        # Solo excluye articulos absolutamente irrelevantes (raw<0.20).
+        # El ranking real lo hace el hybrid_score (fuzzy+normalized).
+        # Esto garantiza siempre llegar a max_results=100.
         corpus_size = len(articles)
-        if corpus_size > 300:
-            RAW_SCORE_FLOOR = 0.38  # v8.0: Relajado para asegurar pool de 80
-        elif corpus_size > 100:
-            RAW_SCORE_FLOOR = 0.38
-        else:
-            RAW_SCORE_FLOOR = 0.38  # Permisivo para corpus pequeños
+        RAW_SCORE_FLOOR = 0.20   # Piso minimo de calidad, no filtro de ranking
             
-        logging.info(f"📊 Líder Raw: {max_raw:.3f} | RAW FLOOR adaptativo: {RAW_SCORE_FLOOR} (corpus={corpus_size})")
+        logging.info(f"📊 Líder Raw: {max_raw:.3f} | RAW FLOOR mínimo: {RAW_SCORE_FLOOR} (corpus={corpus_size})")
         
         # Capa 1: Gatekeeper Dinámico
 
@@ -546,24 +543,33 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
             art['domain_relevance'] = 1.0
 
     # ============================================================
-    # ESTRATEGIA DE SELECCION (AGNÓSTICA V4)
+    # ESTRATEGIA DE SELECCION V5 - FUZZY-FIRST RANKING
     # ============================================================
-    # 1. Filtrar primero por Raw Score (Criterio de Inclusión Académico Adaptativo)
+    # El hybrid_score (60% fuzzy + 40% normalizado) es el criterio principal.
+    # El RAW_SCORE_FLOOR (0.20) solo excluye articulos absolutamente off-topic.
+    # Esto garantiza siempre llegar a max_results=100.
+
+    # 1. Excluir solo los absolutamente irrelevantes (raw < 0.20)
     eligible = [a for a in articles if a.get('raw_similarity', 0) >= RAW_SCORE_FLOOR]
     
-    # 2. Ordenar por Normalized Score (Ranking Relativo)
+    # 2. Ordenar por hybrid_score (ranking fuzzy-first)
     eligible.sort(key=lambda x: x.get('similarity', 0), reverse=True)
 
-    logging.info(f"🔍 Filtro RAW ({RAW_SCORE_FLOOR}): {len(articles)} → {len(eligible)} candidatos")
+    raw_above_floor = len(eligible)
+    logging.info(f"🔍 Candidatos (raw≥{RAW_SCORE_FLOOR}): {len(articles)} → {raw_above_floor} | Seleccionando Top-{max_results} por hybrid_score")
 
-    # 3. Priorizar artículos con URL válida
-    final_selection = [a for a in eligible if a.get('url') and len(str(a.get('url'))) > 10]
-    
-    # Completar con mejores sin URL
+    # 3. Priorizar artículos con URL válida dentro del top-N
+    with_url    = [a for a in eligible if a.get('url') and len(str(a.get('url'))) > 10]
+    without_url = [a for a in eligible if not (a.get('url') and len(str(a.get('url'))) > 10)]
+
+    # Tomar top-N combinando con_url primero, luego sin_url para completar
+    final_selection = with_url[:max_results]
     if len(final_selection) < max_results:
-        without_url = [a for a in eligible if not (a.get('url') and len(str(a.get('url'))) > 10)]
         needed = max_results - len(final_selection)
         final_selection.extend(without_url[:needed])
+
+    # Mantener orden por hybrid_score tras combinar
+    final_selection.sort(key=lambda x: x.get('similarity', 0), reverse=True)
 
     # ============================================================
     # REPORTE DE SELECCION V3
