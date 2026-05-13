@@ -1,11 +1,13 @@
 import logging
 import re
+import time
+import json
 import numpy as np
 from typing import List, Dict, Set
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from sklearn.metrics.pairwise import cosine_similarity
 
 import requests
-import json
 import config
 from modules.ai.embedding_service import get_embeddings, get_single_embedding
 from utils.query_expander import expand_query_with_llm, extract_english_terms, get_exclusion_terms_with_llm
@@ -572,6 +574,18 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
     final_selection.sort(key=lambda x: x.get('similarity', 0), reverse=True)
 
     # ============================================================
+    # AI ABSTRACT RE-RANKER (v1.0)
+    # Evalua abstracts en zona ambigua con IA para eliminar falsos positivos
+    # ============================================================
+    if original_question and config.CEREBRAS_API_KEYS:
+        final_selection = ai_rerank_abstracts(
+            candidates=final_selection,
+            original_question=original_question,
+            target_n=max_results,
+            candidate_pool=min(len(final_selection), 150),
+        )
+
+    # ============================================================
     # REPORTE DE SELECCION V3
     # ============================================================
     if final_selection:
@@ -579,17 +593,127 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
         count_without_url = len(final_selection) - count_with_url
         avg_similarity = np.mean([art['similarity'] for art in final_selection])
         avg_domain = np.mean([art.get('domain_relevance', 0) for art in final_selection])
+        ai_evaluated = sum(1 for art in final_selection if art.get('ai_evaluated', False))
 
         logging.info(
-            f"\n    ✅ SCREENING V3 COMPLETADO:\n"
+            f"\n    ✅ SCREENING V4 (FUZZY+AI) COMPLETADO:\n"
             f"       📄 Total seleccionados: {len(final_selection)}\n"
             f"       🔗 Con URL/PDF: {count_with_url}\n"
             f"       ❌ Sin URL: {count_without_url}\n"
-            f"       📊 Similitud promedio (Percentil Scaled): {avg_similarity*100:.1f}%\n"
+            f"       🤖 Evaluados por IA: {ai_evaluated}\n"
+            f"       📊 Similitud promedio: {avg_similarity*100:.1f}%\n"
             f"       🏷️ Relevancia de dominio promedio: {avg_domain*100:.1f}%\n"
             f"       🎯 Rango similitud: {min(art['similarity'] for art in final_selection)*100:.1f}% - {max(art['similarity'] for art in final_selection)*100:.1f}%\n"
         )
     else:
-        logging.warning("⚠️ SCREENING V3: Ningún artículo superó los umbrales de relevancia")
+        logging.warning("⚠️ SCREENING V4: Ningún artículo superó los umbrales de relevancia")
 
     return final_selection[:max_results]
+
+
+# ============================================================
+# AI ABSTRACT RE-RANKER (v1.0)
+# ============================================================
+
+def ai_rerank_abstracts(
+    candidates: List[Dict],
+    original_question: str,
+    target_n: int = 100,
+    candidate_pool: int = 150,
+    high_confidence_threshold: float = 0.75,
+    max_workers: int = 5,
+) -> List[Dict]:
+    """
+    Re-rankea candidatos usando IA para evaluar relevancia directa de abstracts.
+
+    Estrategia de dos zonas:
+    - Articulos con hybrid_score >= high_confidence_threshold: pasan sin evaluacion IA
+    - Articulos en zona ambigua: evaluados con Cerebras llama3.1-8b (score 1-10)
+
+    Score final = 0.5 * hybrid_fuzzy + 0.5 * (ai_score / 10)
+    """
+    pool = candidates[:candidate_pool]
+    if not pool:
+        return candidates[:target_n]
+
+    api_key = config.CEREBRAS_API_KEYS[0] if config.CEREBRAS_API_KEYS else None
+    if not api_key:
+        logging.warning("⚠️ [AI Rerank] Sin clave Cerebras disponible, omitiendo re-ranking")
+        return candidates[:target_n]
+
+    # Separar zona confiable (no necesita IA) de zona ambigua
+    confident  = [a for a in pool if a.get('similarity', 0) >= high_confidence_threshold]
+    ambiguous  = [a for a in pool if a.get('similarity', 0) <  high_confidence_threshold]
+
+    logging.info(
+        f"🤖 [AI Rerank] Zona confiable: {len(confident)} | "
+        f"Zona ambigua a evaluar: {len(ambiguous)} artículos"
+    )
+
+    def score_article(art: Dict) -> float:
+        """Puntua un articulo 1-10 segun relevancia directa a la pregunta de investigacion."""
+        title    = art.get('title', '')[:150]
+        abstract = art.get('abstract', '')[:450]
+
+        prompt = (
+            f'Research question: "{original_question}"\n\n'
+            f'Article: "{title}"\n'
+            f'Abstract: "{abstract}"\n\n'
+            'Rate the DIRECT relevance of this article to the research question (1-10).\n'
+            '- 9-10: Directly and specifically addresses the exact topic with evidence\n'
+            '- 7-8: Highly relevant, main topic matches\n'
+            '- 4-6: Partially relevant, related field\n'
+            '- 1-3: Only tangentially related or different domain\n\n'
+            'Respond ONLY with valid JSON: {"score": N}'
+        )
+        try:
+            resp = requests.post(
+                config.CEREBRAS_ENDPOINT,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": config.CEREBRAS_MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 20,
+                    "temperature": 0.0
+                },
+                timeout=15
+            )
+            content = resp.json()["choices"][0]["message"]["content"].strip()
+            # Extraer JSON (a veces el modelo escribe texto extra)
+            match = re.search(r'\{\s*"score"\s*:\s*(\d+)\s*\}', content)
+            if match:
+                return float(match.group(1)) / 10.0
+            data = json.loads(content)
+            return float(data.get("score", 5)) / 10.0
+        except Exception as e:
+            logging.debug(f"🔹 [AI Rerank] Error scoring '{title[:35]}': {e}")
+            return 0.5  # Score neutro si falla
+
+    # Evaluar zona ambigua con workers concurrentes
+    if ambiguous:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(score_article, art): i for i, art in enumerate(ambiguous)}
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    ai_score = future.result()
+                except Exception:
+                    ai_score = 0.5
+
+                hybrid = ambiguous[idx].get('similarity', 0.5)
+                # Score combinado: 50% fuzzy + 50% IA
+                ambiguous[idx]['similarity']         = round((hybrid * 0.5) + (ai_score * 0.5), 4)
+                ambiguous[idx]['ai_relevance_score'] = round(ai_score * 10, 1)  # guardar score 1-10
+                ambiguous[idx]['ai_evaluated']       = True
+
+        ai_avg = np.mean([a.get('ai_relevance_score', 5) for a in ambiguous])
+        logging.info(f"✅ [AI Rerank] Completado | Score IA promedio zona ambigua: {ai_avg:.1f}/10")
+
+    # Reunir todo y ordenar por score final combinado
+    all_scored = confident + ambiguous
+    all_scored.sort(key=lambda x: x.get('similarity', 0), reverse=True)
+
+    return all_scored[:target_n]
