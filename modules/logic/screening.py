@@ -582,7 +582,7 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
             candidates=final_selection,
             original_question=original_question,
             target_n=max_results,
-            candidate_pool=min(len(final_selection), 150),
+            candidate_pool=min(len(final_selection), 200),  # Pool más amplio
         )
 
     # ============================================================
@@ -619,20 +619,25 @@ def ai_rerank_abstracts(
     candidates: List[Dict],
     original_question: str,
     target_n: int = 100,
-    candidate_pool: int = 150,
-    min_ai_score: float = 5.0,   # Corte duro: articulos con AI < 5/10 son EXCLUIDOS
+    candidate_pool: int = 200,
+    min_ai_score: float = 7.0,   # Corte duro: sólo artículos AI ≥ 7/10 pasan
     max_workers: int = 8,
 ) -> List[Dict]:
     """
-    Re-rankea candidatos usando IA como arbitro principal de relevancia.
+    Re-rankea y FILTRA candidatos usando IA como único árbitro de relevancia.
 
-    v2.0 vs v1.0:
-    - TODOS los articulos son evaluados (antes solo la zona ambigua)
-    - Corte duro: articulos con AI score < min_ai_score son excluidos del pool
-    - Pesos AI-first: 65% AI + 35% fuzzy (antes 50/50)
-    - Prompt mejorado: penaliza explicitamente dominios cruzados
+    v2.1 vs v2.0:
+    - Score final = AI-ONLY (ai_score / 10.0)
+      - El % mostrado al usuario ES directamente la opinión de la IA
+      - Sin contaminación del fuzzy/embedding en el score final
+    - Corte duro subido: min_ai_score = 7.0 (antes 5.0)
+      - Sólo artículos donde la IA dice >= 7/10 entran al Top-100
+      - Garantiza que el Top-100 mostrado sea 70%+ siempre
+    - Prompt más exigente: requiere evidencia empírica específica
 
-    Score final = 0.65 * (ai_score/10) + 0.35 * fuzzy_hybrid
+    Flujo:
+      Fuzzy/Embeddings -> top-200 candidatos (pre-filtro veloz)
+      AI Cerebras     -> top-100 calificados (arbitro final, 65ms/art)
     """
     pool = candidates[:candidate_pool]
     if not pool:
@@ -654,17 +659,17 @@ def ai_rerank_abstracts(
             f'Research question: "{original_question}"\n\n'
             f'Title: "{title}"\n'
             f'Abstract: "{abstract}"\n\n'
-            'Does this article SPECIFICALLY and DIRECTLY address the research question?\n'
-            'Score 1-10:\n'
-            '- 8-10: Directly studies this exact topic with empirical/experimental results\n'
-            '- 5-7: Clearly relevant, main topic overlaps significantly\n'
-            '- 1-4: Off-topic, wrong domain, or only tangentially related\n\n'
-            'CRITICAL RULES:\n'
-            '- If the article is about medicine, biology, agriculture, education, physics, '
-            'automotive, or any field OTHER than software/computer science: score 1-2\n'
-            '- If the article uses AI but applies it to a DIFFERENT DOMAIN than the research '
-            'question: score 1-3\n'
-            '- Only score >= 5 if the article is DIRECTLY about the research question topic\n\n'
+            'Rate how DIRECTLY and SPECIFICALLY this article addresses the research question.\n'
+            'Score 1-10 (be STRICT):\n'
+            '- 9-10: Core topic match + empirical results/experiments measuring the exact impact\n'
+            '- 7-8: Directly studies the topic with clear methodology and findings\n'
+            '- 5-6: Related topic but lacks specificity, empirical data, or direct alignment\n'
+            '- 1-4: Wrong domain, tangential, or does not address the research question directly\n\n'
+            'MANDATORY EXCLUSION RULES (score 1-2):\n'
+            '- Article is about medicine, biology, education, physics, automotive, finance, or ANY '
+            'domain other than software/computer engineering\n'
+            '- Article uses AI but in a DIFFERENT domain than the research question\n'
+            '- Article is a general overview with no specific findings about the research question\n\n'
             'Respond ONLY with valid JSON: {"score": N}'
         )
         try:
@@ -703,7 +708,7 @@ def ai_rerank_abstracts(
             except Exception:
                 ai_raw_scores[idx] = 5.0
 
-    # Aplicar scores y corte duro
+    # Aplicar scores y corte duro (min 7/10)
     qualified = []
     excluded  = 0
     for i, art in enumerate(pool):
@@ -715,19 +720,20 @@ def ai_rerank_abstracts(
             excluded += 1
             continue  # EXCLUIR del pool
 
-        fuzzy_hybrid = art.get('similarity', 0.5)
-        # AI-first: 65% IA + 35% fuzzy
-        art['similarity'] = round((ai_score / 10.0) * 0.65 + fuzzy_hybrid * 0.35, 4)
+        # Score final = PURE AI (el % que ve el usuario = criterio de la IA)
+        # El fuzzy queda solo como pre-filtro, no contamina el display final
+        art['similarity'] = round(ai_score / 10.0, 4)
         qualified.append(art)
 
     qualified.sort(key=lambda x: x.get('similarity', 0), reverse=True)
 
     ai_avg = np.mean(list(ai_raw_scores.values())) if ai_raw_scores else 0
     logging.info(
-        f"✅ [AI Rerank v2] Completado | Evaluados: {len(pool)} | "
+        f"✅ [AI Rerank v2.1] Completado | Evaluados: {len(pool)} | "
         f"Excluidos (AI<{min_ai_score}): {excluded} | "
         f"Calificados: {len(qualified)} | Score IA promedio: {ai_avg:.1f}/10"
     )
 
     return qualified[:target_n]
+
 
