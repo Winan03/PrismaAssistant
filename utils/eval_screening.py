@@ -44,13 +44,13 @@ def evaluate_results(articles: List[Dict]) -> Dict:
     abstracts_lower = [str(p.get('abstract', '')).lower() for p in articles]
     combined_texts = [f"{t} {a}" for t, a in zip(titles_lower, abstracts_lower)]
     
-    # 1. Medir RECALL (¿Cuántos obligatorios encontramos en el Top-80?)
+    # 1. Medir RECALL (¿Cuántos obligatorios encontramos en el Top-100?)
     found_hits = []
     for must in GROUND_TRUTH['must_include']:
         if any(must.lower() in text for text in combined_texts):
             found_hits.append(must)
             
-    # 2. Medir RUIDO (¿Cuántos excluidos se colaron en el Top-80?)
+    # 2. Medir RUIDO (¿Cuántos excluidos se colaron en el Top-100?)
     noise_hits = []
     for excl in GROUND_TRUTH['must_exclude']:
         if any(excl.lower() in text for text in combined_texts):
@@ -71,14 +71,14 @@ def evaluate_results(articles: List[Dict]) -> Dict:
     score = (recall * 100) - (noise_ratio * 100)
     
     logging.info("="*50)
-    logging.info(f"📊 EVALUACIÓN DE CALIDAD SEMÁNTICA (v8.0 - Top-80 / Top-20)")
+    logging.info(f"📊 EVALUACIÓN DE CALIDAD SEMÁNTICA (v8.0 - Top-100 / Top-20)")
     logging.info("="*50)
-    logging.info(f"✅ RECALL (Top-80): {len(found_hits)}/{len(GROUND_TRUTH['must_include'])} ({recall*100:.1f}%)")
+    logging.info(f"✅ RECALL (Top-100): {len(found_hits)}/{len(GROUND_TRUTH['must_include'])} ({recall*100:.1f}%)")
     if len(found_hits) < len(GROUND_TRUTH['must_include']):
         missing = set(GROUND_TRUTH['must_include']) - set(found_hits)
         logging.info(f"   ❌ Faltantes: {list(missing)}")
         
-    logging.info(f"❌ RUIDO (Top-80): {len(noise_hits)}/{len(GROUND_TRUTH['must_exclude'])} ({noise_ratio*100:.1f}%)")
+    logging.info(f"❌ RUIDO (Top-100): {len(noise_hits)}/{len(GROUND_TRUTH['must_exclude'])} ({noise_ratio*100:.1f}%)")
     if noise_hits:
         logging.info(f"   ⚠️ Presentes: {noise_hits}")
     

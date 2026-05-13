@@ -314,7 +314,8 @@ def get_adaptive_threshold(scores: List[float], target_n: int = 50, min_threshol
     return final_thresh
 
 def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
-                    max_results: int = 50, original_question: str = "") -> List[Dict]:
+                    max_results: int = 50, original_question: str = "",
+                    inclusion_criteria: str = "", exclusion_criteria: str = "") -> List[Dict]:
     """
     Filtra articulos usando SPECTER2 + filtro de relevancia de dominio.
 
@@ -343,10 +344,30 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
     try:
         # 1. Obtener queries de screening en INGLES (Cierre de Gap Semántico)
         original_q = original_question or query
-        semantic_queries = expand_query_with_llm(original_q)
-        english_terms = extract_english_terms(original_q)
+
+        # ── Enriquecimiento vectorial con criterios I/E del investigador (Opción A) ──
+        # Los criterios de inclusión se concatenan a la query para orientar el embedding.
+        # Los criterios de exclusión se agregan a la lista de términos de exclusión existentes.
+        enriched_query = original_q
+        manual_exclusion_terms = []
+        if inclusion_criteria and inclusion_criteria.strip():
+            # Cada línea es un criterio; se concatenan como contexto adicional
+            inc_lines = [l.strip() for l in inclusion_criteria.strip().splitlines() if l.strip()]
+            if inc_lines:
+                enriched_query = original_q + ". " + " AND ".join(inc_lines)
+                logging.info(f"✅ [Criterios I] Enriqueciendo query con {len(inc_lines)} criterios de inclusión")
+        if exclusion_criteria and exclusion_criteria.strip():
+            exc_lines = [l.strip() for l in exclusion_criteria.strip().splitlines() if l.strip()]
+            manual_exclusion_terms = [line.lower() for line in exc_lines if line]
+            if manual_exclusion_terms:
+                logging.info(f"🚫 [Criterios E] {len(manual_exclusion_terms)} criterios de exclusión manuales aplicados")
+
+        semantic_queries = expand_query_with_llm(enriched_query)
+        english_terms = extract_english_terms(enriched_query)
         
         exclusion_terms = get_exclusion_terms_with_llm(original_q)
+        # Combinar exclusiones: LLM + manuales del investigador
+        exclusion_terms = list(set(exclusion_terms + manual_exclusion_terms))
         comparison_poles = _extract_comparison_poles(original_q)
         
         if comparison_poles:

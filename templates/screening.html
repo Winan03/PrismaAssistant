@@ -288,7 +288,7 @@
             columnConfig = JSON.parse(configElement.textContent.trim());
             if (!articlesData || !Array.isArray(articlesData)) throw new Error("Datos no válidos");
             renderDynamicButtons();
-            document.getElementById('total-articles-count').textContent = `${articlesData.length} artículos candidatos (≥ 70% relevancia)`;
+            document.getElementById('total-articles-count').textContent = `${articlesData.length} de ${articlesData.length} artículos`;
             return true;
           } catch (e) {
             console.error("❌ Error:", e);
@@ -423,7 +423,10 @@
               <div style="padding:20px">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px">
                   <div style="flex:1;min-width:0">
-                    <h3 style="font-size:1rem;font-weight:700;line-height:1.4;margin-bottom:8px;color:var(--text)">${title}</h3>
+                    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">
+                      <span style="flex-shrink:0;min-width:32px;height:32px;border-radius:8px;background:var(--primary-bg);border:1.5px solid var(--primary-light);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;color:var(--primary);line-height:1">#${index + 1}</span>
+                      <h3 style="font-size:1rem;font-weight:700;line-height:1.4;color:var(--text);margin:0">${title}</h3>
+                    </div>
                     <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px">
                       <span class="meta-badge"><i class="fas fa-calendar"></i> ${year}</span>
                       <span style="font-size:0.75rem;color:var(--text-muted)"><i class="fas fa-users" style="margin-right:3px"></i>${authors}</span>

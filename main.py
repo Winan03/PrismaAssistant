@@ -425,7 +425,9 @@ def batch_pdf_downloader(articles: list, session_id: str):
 @app.post("/apply_filters")
 async def apply_filters(request: Request, background_tasks: BackgroundTasks, session_id: str = Form(...), question: str = Form(...),
                         start_year: int = Form(2000), end_year: int = Form(2025),
-                        open_access: Optional[str] = Form("false")):
+                        open_access: Optional[str] = Form("false"),
+                        inclusion_criteria: Optional[str] = Form(""),
+                        exclusion_criteria: Optional[str] = Form("")):
     
     if not session_exists(session_id):
         raise HTTPException(400, "Sesión expirada")
@@ -459,8 +461,16 @@ async def apply_filters(request: Request, background_tasks: BackgroundTasks, ses
         except:
             query_for_screening = question
 
-        candidates = screening.screen_articles(unique, query_for_screening, max_results=200, original_question=question)
+        candidates = screening.screen_articles(
+            unique, query_for_screening, max_results=200,
+            original_question=question,
+            inclusion_criteria=inclusion_criteria or "",
+            exclusion_criteria=exclusion_criteria or ""
+        )
         data["last_screening_question"] = question
+        # Persistir criterios para poder detectar cambios futuros
+        data["last_inclusion_criteria"] = inclusion_criteria or ""
+        data["last_exclusion_criteria"] = exclusion_criteria or ""
     
     with_url = []
     without_url = []
@@ -472,19 +482,19 @@ async def apply_filters(request: Request, background_tasks: BackgroundTasks, ses
         else:
             without_url.append(art)
             
-    final_top_80 = with_url[:80]
+    final_top_100 = with_url[:100]
     
-    if len(final_top_80) < 80:
-        needed = 80 - len(final_top_80)
-        final_top_80.extend(without_url[:needed])
+    if len(final_top_100) < 100:
+        needed = 100 - len(final_top_100)
+        final_top_100.extend(without_url[:needed])
         
     # ✅ v11.1: Activar intención de descarga proactiva para artículos con URL
-    for art in final_top_80:
+    for art in final_top_100:
         if art.get('url') and len(str(art.get('url'))) > 10:
             if not art.get('is_pdf_downloaded'):
                 art['needs_pdf_download'] = True
     
-    relevant = final_top_80
+    relevant = final_top_100
 
     # ✅ FUSIÓN v8.3: Sincronización proactiva de PDF con ChromaDB para evitar "SIN PDF" falso
     logging.info(f"🔍 Sincronizando estado PDF para {len(relevant)} artículos...")

@@ -96,7 +96,34 @@
       outline: none; transition: border-color 0.2s;
     }
     .year-input:focus { border-color: var(--primary-light); }
+    .year-input.year-error { border-color: #ef4444; background: #fef2f2; }
     .year-sep { color: var(--text-muted); font-weight: 600; }
+    .year-error-msg { display: none; font-size: 0.7rem; color: #ef4444; margin-top: 6px; font-weight: 600; }
+
+    /* ── Criteria Section ── */
+    .criteria-toggle {
+      display: flex; align-items: center; justify-content: space-between; cursor: pointer;
+      padding: 10px 0; user-select: none;
+    }
+    .criteria-toggle:hover .criteria-toggle-label { color: var(--primary); }
+    .criteria-toggle-label { font-size: 0.85rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .criteria-toggle-label i { color: var(--primary); }
+    .criteria-toggle-badge { font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 8px; background: #f0fdf4; color: var(--primary); border: 1px solid #a7f3d0; }
+    .criteria-toggle-chevron { color: var(--text-muted); transition: transform 0.25s; font-size: 0.75rem; }
+    .criteria-body { overflow: hidden; max-height: 0; transition: max-height 0.35s ease, opacity 0.25s ease; opacity: 0; }
+    .criteria-body.open { max-height: 600px; opacity: 1; }
+    .criteria-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 14px; }
+    .criteria-col h4 { font-size: 0.78rem; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .criteria-col h4.inc { color: #059669; }
+    .criteria-col h4.exc { color: #dc2626; }
+    .criteria-textarea {
+      width: 100%; border: 2px solid var(--border); border-radius: 10px; padding: 10px 12px;
+      font-family: inherit; font-size: 0.78rem; line-height: 1.6; color: var(--text);
+      resize: vertical; min-height: 100px; outline: none; transition: border-color 0.2s;
+      background: #fafbfc;
+    }
+    .criteria-textarea:focus { border-color: var(--primary-light); background: #fff; }
+    .criteria-hint { font-size: 0.68rem; color: var(--text-muted); margin-top: 5px; line-height: 1.4; }
 
     /* ── Toggle Switch ── */
     .toggle-row {
@@ -238,10 +265,11 @@
           <h3><i class="fas fa-calendar-days"></i> Rango de Años</h3>
           <p class="hint">Limite la antigüedad de las publicaciones.</p>
           <div class="year-row">
-            <input type="number" name="start_year" id="start_year" value="{{ year_min }}" min="{{ year_min }}" max="{{ year_max }}" class="year-input">
+            <input type="number" name="start_year" id="start_year" value="{{ year_min }}" min="{{ year_min }}" max="{{ year_max }}" class="year-input" maxlength="4" oninput="enforceYearLength(this)">
             <span class="year-sep">—</span>
-            <input type="number" name="end_year" id="end_year" value="{{ year_max }}" min="{{ year_min }}" max="{{ year_max }}" class="year-input">
+            <input type="number" name="end_year" id="end_year" value="{{ year_max }}" min="{{ year_min }}" max="{{ year_max }}" class="year-input" maxlength="4" oninput="enforceYearLength(this)">
           </div>
+          <div class="year-error-msg" id="year-error-msg"><i class="fas fa-triangle-exclamation"></i> El año debe tener exactamente 4 dígitos</div>
         </div>
 
         <!-- Open Access (ON por defecto) -->
@@ -294,6 +322,53 @@
         </div>
       </div>
 
+      <!-- Criterios de Inclusión / Exclusión (Opcional) -->
+      <div class="filter-card full">
+        <div class="criteria-toggle" id="criteria-toggle" onclick="toggleCriteria()">
+          <div class="criteria-toggle-label">
+            <i class="fas fa-filter-list"></i>
+            Criterios de Inclusión / Exclusión
+            <span class="criteria-toggle-badge">OPCIONAL</span>
+          </div>
+          <i class="fas fa-chevron-down criteria-toggle-chevron" id="criteria-chevron"></i>
+        </div>
+        <div class="criteria-body" id="criteria-body">
+          <p style="font-size:0.75rem;color:var(--text-muted);line-height:1.5;margin-bottom:4px">
+            Define criterios para orientar el cribado semántico. El sistema los usará para
+            enriquecer la búsqueda vectorial y mejorar el ranking del
+            <strong>Top 100</strong> resultante. Un criterio por línea.
+          </p>
+          <div class="criteria-grid">
+            <div class="criteria-col">
+              <h4 class="inc"><i class="fas fa-circle-check"></i> Criterios de Inclusión</h4>
+              <textarea
+                name="inclusion_criteria"
+                id="inclusion_criteria"
+                class="criteria-textarea"
+                placeholder="Ejemplo:
+Estudios experimentales o cuasi-experimentales
+Publicados en revistas indexadas
+Relacionados con IA en pruebas de software"
+              ></textarea>
+              <p class="criteria-hint"><i class="fas fa-circle-info"></i> Los artículos que cumplan estos criterios serán priorizados en el ranking semántico.</p>
+            </div>
+            <div class="criteria-col">
+              <h4 class="exc"><i class="fas fa-circle-xmark"></i> Criterios de Exclusión</h4>
+              <textarea
+                name="exclusion_criteria"
+                id="exclusion_criteria"
+                class="criteria-textarea"
+                placeholder="Ejemplo:
+Artículos de opinión sin metodología
+Duplicados o revisiones de libros
+Fuera del rango temporal de interés"
+              ></textarea>
+              <p class="criteria-hint"><i class="fas fa-circle-info"></i> Las palabras clave de estos criterios se usarán como malus en el scoring semántico.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Info -->
       <div class="info-box">
         <i class="fas fa-circle-info"></i>
@@ -310,6 +385,27 @@
   </div>
 
   <script>
+    // ── Year 4-digit enforcement ──
+    function enforceYearLength(input) {
+      const val = String(input.value).replace(/\D/g, '');
+      if (val.length > 4) {
+        input.value = parseInt(val.substring(0, 4));
+      }
+      const errMsg = document.getElementById('year-error-msg');
+      const hasError = val.length > 4;
+      input.classList.toggle('year-error', hasError);
+      if (errMsg) errMsg.style.display = hasError ? 'block' : 'none';
+      handleFilterChange();
+    }
+
+    // ── Criteria panel toggle ──
+    function toggleCriteria() {
+      const body = document.getElementById('criteria-body');
+      const chevron = document.getElementById('criteria-chevron');
+      const isOpen = body.classList.toggle('open');
+      chevron.style.transform = isOpen ? 'rotate(180deg)' : '';
+    }
+
     // ── Chip toggle ──
     document.querySelectorAll('.chip').forEach(chip => {
       chip.addEventListener('click', () => {
@@ -365,8 +461,15 @@
       }
     }
 
-    // ── Submit loading ──
-    document.getElementById('filter-form').addEventListener('submit', function() {
+    // ── Block submit if year error ──
+    document.getElementById('filter-form').addEventListener('submit', function(e) {
+      const startVal = String(document.getElementById('start_year').value);
+      const endVal = String(document.getElementById('end_year').value);
+      if (startVal.length > 4 || endVal.length > 4) {
+        e.preventDefault();
+        document.getElementById('year-error-msg').style.display = 'block';
+        return;
+      }
       const btn = document.getElementById('submit-btn');
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando artículos...';
       btn.disabled = true;
