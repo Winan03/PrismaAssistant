@@ -430,22 +430,22 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
         # 1. Obtener queries de screening en INGLES (Cierre de Gap Semántico)
         original_q = original_question or query
 
-        # ── Enriquecimiento vectorial con criterios I/E del investigador (Opción A) ──
-        # Los criterios de inclusión se concatenan a la query para orientar el embedding.
-        # Los criterios de exclusión se agregan a la lista de términos de exclusión existentes.
+        # ── Enriquecimiento vectorial con criterios I/E del investigador ──
         enriched_query = original_q
-        manual_exclusion_terms = []
+        inc_lines: List[str] = []
+        manual_exclusion_terms: List[str] = []
+
         if inclusion_criteria and inclusion_criteria.strip():
-            # Cada línea es un criterio; se concatenan como contexto adicional
             inc_lines = [l.strip() for l in inclusion_criteria.strip().splitlines() if l.strip()]
             if inc_lines:
                 enriched_query = original_q + ". " + " AND ".join(inc_lines)
-                logging.info(f"✅ [Criterios I] Enriqueciendo query con {len(inc_lines)} criterios de inclusión")
+                logging.info(f"✅ [Criterios I] {len(inc_lines)} criterios de inclusión detectados")
         if exclusion_criteria and exclusion_criteria.strip():
-            exc_lines = [l.strip() for l in exclusion_criteria.strip().splitlines() if l.strip()]
-            manual_exclusion_terms = [line.lower() for line in exc_lines if line]
+            exc_raw = [l.strip() for l in exclusion_criteria.strip().splitlines() if l.strip()]
+            manual_exclusion_terms = [line.lower() for line in exc_raw if line]
             if manual_exclusion_terms:
-                logging.info(f"🚫 [Criterios E] {len(manual_exclusion_terms)} criterios de exclusión manuales aplicados")
+                logging.info(f"🚫 [Criterios E] {len(manual_exclusion_terms)} criterios de exclusión detectados")
+
 
         semantic_queries = expand_query_with_llm(enriched_query)
         english_terms = extract_english_terms(enriched_query)
@@ -578,11 +578,13 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
     # Evalua abstracts en zona ambigua con IA para eliminar falsos positivos
     # ============================================================
     if original_question and config.CEREBRAS_API_KEYS:
-        final_selection = ai_rerank_abstracts(
+        final_selection = ai_multicriteria_score(
             candidates=final_selection,
             original_question=original_question,
             target_n=max_results,
-            candidate_pool=min(len(final_selection), 200),  # Pool más amplio
+            candidate_pool=min(len(final_selection), 200),
+            inclusion_criteria=inclusion_criteria,
+            exclusion_criteria=exclusion_criteria,
         )
 
     # ============================================================
@@ -610,130 +612,424 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
 
     return final_selection[:max_results]
 
+# ============================================================
+# MODO CRITERIOS: AI SCREENING DIRECTO (v1.0)
+# Evaluacion de TODOS los articulos contra criterios I/E con IA
+# ============================================================
+
+def ai_criteria_screening_full(
+    articles: List[Dict],
+    question: str,
+    inc_lines: List[str],
+    exc_lines: List[str],
+    target_n: int = 100,
+    max_workers: int = 8,
+) -> List[Dict]:
+    """
+    Evalua TODOS los articulos directamente contra criterios I/E con Cerebras.
+    Reemplaza al pipeline fuzzy/embeddings cuando el investigador define criterios.
+
+    Logica:
+    - include=True  si cumple TODOS los criterios de inclusion
+                    Y no cumple NINGUNO de exclusion
+    - include=False en cualquier otro caso
+    - Siempre retorna target_n articulos:
+        primero los calificados (ordenados por score),
+        luego relleno si son necesarios para llegar a 100
+    """
+    api_key = config.CEREBRAS_API_KEYS[0]
+
+    criteria_block = ""
+    if inc_lines:
+        criteria_block += "INCLUSION CRITERIA (article MUST meet ALL):\n"
+        criteria_block += "\n".join(f"- {c}" for c in inc_lines) + "\n\n"
+    if exc_lines:
+        criteria_block += "EXCLUSION CRITERIA (article is EXCLUDED if it meets ANY):\n"
+        criteria_block += "\n".join(f"- {c}" for c in exc_lines) + "\n\n"
+
+    logging.info(f"🔬 [Criteria Screen] Evaluando {len(articles)} articulos con Cerebras...")
+
+    def evaluate_article(art: Dict):
+        title    = art.get('title', '')[:150]
+        abstract = art.get('abstract', '')[:500]
+        prompt = (
+            f'Research question: "{question}"\n\n'
+            f'{criteria_block}'
+            f'Article title: "{title}"\n'
+            f'Abstract: "{abstract}"\n\n'
+            'Evaluate this article for a systematic literature review:\n'
+            '"include": true  = meets ALL inclusion criteria AND violates NO exclusion criterion\n'
+            '"include": false = fails ANY inclusion criterion OR meets ANY exclusion criterion\n'
+            '"score": 1-10   = relevance score if included (use 1-3 if excluded)\n\n'
+            'Be strict: if the abstract does NOT clearly confirm an inclusion criterion, set include=false.\n\n'
+            'Respond ONLY with valid JSON: {"include": true, "score": 8}'
+        )
+        try:
+            resp = requests.post(
+                config.CEREBRAS_ENDPOINT,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"model": config.CEREBRAS_MODEL,
+                      "messages": [{"role": "user", "content": prompt}],
+                      "max_tokens": 30, "temperature": 0.0},
+                timeout=15
+            )
+            content = resp.json()["choices"][0]["message"]["content"].strip()
+            # Regex: acepta cualquier orden de keys
+            m1 = re.search(r'"include"\s*:\s*(true|false)', content)
+            m2 = re.search(r'"score"\s*:\s*(\d+)', content)
+            if m1 and m2:
+                return m1.group(1) == "true", float(m2.group(1))
+            data = json.loads(content)
+            return bool(data.get("include", True)), float(data.get("score", 5))
+        except Exception as e:
+            logging.debug(f"[Criteria] Error '{title[:35]}': {e}")
+            return True, 5.0  # Error de red: incluir con score neutro
+
+    # Evaluar todos concurrentemente
+    eval_results: dict = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(evaluate_article, art): i for i, art in enumerate(articles)}
+        done = 0
+        for future in as_completed(futures):
+            idx = futures[future]
+            try:
+                inc, score = future.result()
+            except Exception:
+                inc, score = True, 5.0
+            eval_results[idx] = (inc, score)
+            done += 1
+            if done % 100 == 0:
+                logging.info(f"   🔄 Progreso: {done}/{len(articles)} evaluados...")
+
+    # Clasificar y anotar
+    qualified, fill_pool = [], []
+    for i, art in enumerate(articles):
+        inc, score = eval_results.get(i, (True, 5.0))
+        art['ai_relevance_score'] = round(score, 1)
+        art['ai_evaluated']       = True
+        art['criteria_passed']    = inc
+        art['similarity']         = round(score / 10.0, 4)  # % que ve el usuario
+        (qualified if inc else fill_pool).append(art)
+
+    qualified.sort(key=lambda x: x.get('similarity', 0), reverse=True)
+    fill_pool.sort(key=lambda x: x.get('similarity', 0), reverse=True)
+
+    # Garantizar target_n: calificados primero, relleno si son pocos
+    result = qualified[:target_n]
+    if len(result) < target_n:
+        needed = target_n - len(result)
+        result.extend(fill_pool[:needed])
+        logging.info(
+            f"   ⚠️ Solo {len(qualified)} cumplen criterios; "
+            f"se agregan {min(needed, len(fill_pool))} de relleno para llegar a {target_n}"
+        )
+
+    logging.info(
+        f"✅ [Criteria Screen] Evaluados: {len(articles)} | "
+        f"Cumplen criterios: {len(qualified)} | Descartados: {len(fill_pool)} | "
+        f"Mostrando: {len(result)}"
+    )
+    return result
+
 
 # ============================================================
-# AI ABSTRACT RE-RANKER (v2.0 - TOTAL EVALUATION + HARD CUTOFF)
+# EMBUDO ETAPA 2: MULTI-CRITERION SCORER (v1.0)
+# Scoring 3D sobre top-200 pre-filtrados por embeddings
 # ============================================================
+
+# Palabras clave que indican que un articulo ES un survey/review
+_REVIEW_SIGNALS = {
+    "systematic review", "literature review", "scoping review",
+    "mapping study", "meta-analysis", "state of the art",
+    "survey of", "we surveyed", "this paper reviews",
+    "this paper summarizes", "a review of", "review paper",
+    "bibliometric",
+}
+
+def ai_multicriteria_score(
+    candidates: List[Dict],
+    original_question: str,
+    target_n: int = 100,
+    candidate_pool: int = 200,
+    max_workers: int = 8,
+    inclusion_criteria: str = "",
+    exclusion_criteria: str = "",
+) -> List[Dict]:
+    """
+    Etapa 2 del embudo: scoring multi-dimensional sobre top-200.
+
+    3 dimensiones (Cerebras llama3.1-8b fast scoring):
+    1. inclusion_fit  (1-10): cumple criterios de inclusion del investigador
+    2. study_type     (1-10): experimental/aplicado? (surveys -> 1-3)
+    3. exclusion_match(1-10): viola criterios de exclusion? (mayor=peor)
+
+    Score final = 0.25*embed + 0.45*(inclusion_fit/10) + 0.30*(study_type/10)
+
+    Hard exclusion:
+    - study_type <= 3  (es un survey/review/estado del arte)
+    - exclusion_match >= 6 (viola criterio de exclusion del investigador)
+    - inclusion_fit < 4 (claramente no cumple criterios)
+
+    Siempre retorna target_n articulos:
+    primero los calificados (ordenados por score combinado),
+    luego relleno de la zona gris si son necesarios para llegar a 100.
+    """
+    pool = candidates[:candidate_pool]
+    if not pool:
+        return candidates[:target_n]
+
+    api_key = config.CEREBRAS_API_KEYS[0]
+
+    # Construir bloques de criterios
+    inc_block = ""
+    exc_block = ""
+    inc_lines_parsed = [l.strip() for l in inclusion_criteria.strip().splitlines() if l.strip()] if inclusion_criteria else []
+    exc_lines_parsed = [l.strip() for l in exclusion_criteria.strip().splitlines() if l.strip()] if exclusion_criteria else []
+    if inc_lines_parsed:
+        inc_block = "INCLUSION CRITERIA:\n" + "\n".join(f"- {c}" for c in inc_lines_parsed)
+    if exc_lines_parsed:
+        exc_block = "EXCLUSION CRITERIA:\n" + "\n".join(f"- {c}" for c in exc_lines_parsed)
+
+    provider_label = "Cerebras 8B (3D scorer)"
+    logging.info(f"🤖 [MCS] {provider_label} | {len(pool)} candidatos | 3 dimensiones")
+
+    def score_article(art: Dict) -> tuple:
+        title    = art.get('title', '')[:150]
+        abstract = art.get('abstract', '')[:500]
+
+        # Pre-filtro rapido: detectar reviews por texto sin llamar a la IA
+        abstract_lower = abstract.lower()
+        is_review_fast = any(sig in abstract_lower for sig in _REVIEW_SIGNALS)
+
+        prompt = (
+            f'Research question: "{original_question}"\n'
+            + (f'\n{inc_block}\n' if inc_block else '') +
+            (f'{exc_block}\n' if exc_block else '') +
+            f'\nTitle: "{title}"\nAbstract: "{abstract}"\n\n'
+            'Score this article on 3 dimensions (1-10 each):\n'
+            '"i" (inclusion_fit): Does abstract clearly meet ALL inclusion criteria?\n'
+            '   10=clearly meets all, 5=partially, 1=fails or unclear\n'
+            '   If no inclusion criteria given, score how relevant to the research question.\n'
+            '"s" (study_type): Is this an EXPERIMENTAL/APPLIED study with real results?\n'
+            '   9-10=has methodology+metrics+numerical results\n'
+            '   6-8=applied framework or tool evaluation\n'
+            '   3-5=theoretical or preliminary\n'
+            '   1-3=survey, review, mapping, state-of-the-art, meta-analysis\n'
+            '   AUTO-RULE: Contains "review", "survey", "mapping", "state of the art" => score 1-3\n'
+            '"e" (exclusion_match): Does it match ANY exclusion criterion?\n'
+            '   1=matches none, 5=partially, 10=clearly excluded\n\n'
+            'ONLY valid JSON: {"i": N, "s": N, "e": N}'
+        )
+        try:
+            resp = requests.post(
+                config.CEREBRAS_ENDPOINT,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"model": config.CEREBRAS_MODEL,
+                      "messages": [{"role": "user", "content": prompt}],
+                      "max_tokens": 25, "temperature": 0.0},
+                timeout=15
+            )
+            content = resp.json()["choices"][0]["message"]["content"].strip()
+            mi = re.search(r'"i"\s*:\s*(\d+)', content)
+            ms = re.search(r'"s"\s*:\s*(\d+)', content)
+            me = re.search(r'"e"\s*:\s*(\d+)', content)
+            i_score = float(mi.group(1)) if mi else 5.0
+            s_score = float(ms.group(1)) if ms else 5.0
+            e_score = float(me.group(1)) if me else 3.0
+            # Override study_type si el pre-filtro detecto review
+            if is_review_fast:
+                s_score = min(s_score, 3.0)
+            return i_score, s_score, e_score
+        except Exception as ex:
+            logging.debug(f"[MCS] Error '{title[:35]}': {ex}")
+            s_fallback = 3.0 if is_review_fast else 5.0
+            return 5.0, s_fallback, 3.0
+
+    # Evaluar todos concurrentemente
+    mcs_results: dict = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(score_article, art): i for i, art in enumerate(pool)}
+        for future in as_completed(futures):
+            idx = futures[future]
+            try:
+                mcs_results[idx] = future.result()
+            except Exception:
+                mcs_results[idx] = (5.0, 5.0, 3.0)
+
+    # Aplicar scores y separar calificados de relleno
+    qualified, fill_pool = [], []
+    for i, art in enumerate(pool):
+        i_score, s_score, e_score = mcs_results.get(i, (5.0, 5.0, 3.0))
+
+        embed_sim   = art.get('similarity', 0.5)  # score original de embeddings
+        combined    = 0.25 * embed_sim + 0.45 * (i_score / 10.0) + 0.30 * (s_score / 10.0)
+
+        art['ai_relevance_score'] = round(i_score, 1)
+        art['ai_study_type']      = round(s_score, 1)
+        art['ai_excl_match']      = round(e_score, 1)
+        art['ai_evaluated']       = True
+        art['similarity']         = round(combined, 4)  # % display = score combinado
+
+        # Hard exclusion
+        hard_exclude = (
+            s_score <= 3.0     # Es un survey/review
+            or e_score >= 6.0  # Viola criterio de exclusion
+            or i_score < 4.0   # No cumple criterios de inclusion
+        )
+        (fill_pool if hard_exclude else qualified).append(art)
+
+    qualified.sort(key=lambda x: x.get('similarity', 0), reverse=True)
+    fill_pool.sort(key=lambda x: x.get('similarity', 0), reverse=True)
+
+    # Garantizar target_n: calificados primero, relleno si son pocos
+    result = qualified[:target_n]
+    if len(result) < target_n:
+        needed = target_n - len(result)
+        result.extend(fill_pool[:needed])
+        logging.info(f"   📦 Relleno: {min(needed, len(fill_pool))} arts adicionales para completar {target_n}")
+
+    avg_combined = np.mean([a.get('similarity', 0) for a in result]) if result else 0
+    logging.info(
+        f"✅ [MCS] Evaluados: {len(pool)} | Calificados: {len(qualified)} | "
+        f"Descartados (hard): {len(fill_pool)} | Total: {len(result)} | "
+        f"Score combinado prom: {avg_combined*100:.1f}%"
+    )
+    return result
+
+
 
 def ai_rerank_abstracts(
     candidates: List[Dict],
     original_question: str,
     target_n: int = 100,
     candidate_pool: int = 200,
-    min_ai_score: float = 7.0,   # Corte duro: sólo artículos AI ≥ 7/10 pasan
-    max_workers: int = 8,
+    soft_cutoff: float = 6.0,    # Umbral "preferido" — artículos sobre 6 van primero
+    max_workers: int = 4,
+    inclusion_criteria: str = "",
+    exclusion_criteria: str = "",
 ) -> List[Dict]:
     """
-    Re-rankea y FILTRA candidatos usando IA como único árbitro de relevancia.
+    Re-rankea candidatos con IA como árbitro principal.
+    SIEMPRE devuelve exactamente target_n (100) artículos.
 
-    v2.1 vs v2.0:
-    - Score final = AI-ONLY (ai_score / 10.0)
-      - El % mostrado al usuario ES directamente la opinión de la IA
-      - Sin contaminación del fuzzy/embedding en el score final
-    - Corte duro subido: min_ai_score = 7.0 (antes 5.0)
-      - Sólo artículos donde la IA dice >= 7/10 entran al Top-100
-      - Garantiza que el Top-100 mostrado sea 70%+ siempre
-    - Prompt más exigente: requiere evidencia empírica específica
+    v3.1 — clave: NUNCA filtra por debajo de target_n:
+    - Pool top-200 se evalúa con Groq 70B (o Cerebras como fallback)
+    - Los criterios I/E del investigador guían el scoring
+    - Resultado ordenado: primero los ≥ soft_cutoff (mejor calidad),
+      luego los < soft_cutoff como relleno si son necesarios para llegar a 100
+    - Score display = ai_score / 10 (% que ve el usuario = opinión de la IA)
 
-    Flujo:
-      Fuzzy/Embeddings -> top-200 candidatos (pre-filtro veloz)
-      AI Cerebras     -> top-100 calificados (arbitro final, 65ms/art)
+    Flujo PRISMA correcto:
+      Fuzzy/Embeddings → top-200 (pre-filtro veloz)
+      Groq 70B        → re-ordena los 200 por relevancia real
+      Sistema         → muestra top-100 al investigador para revisión manual
     """
     pool = candidates[:candidate_pool]
     if not pool:
         return candidates[:target_n]
 
-    api_key = config.CEREBRAS_API_KEYS[0] if config.CEREBRAS_API_KEYS else None
+    # Elegir proveedor: preferir Groq 70B (mucho más inteligente que 8B)
+    use_groq = bool(config.GROQ_API_KEY)
+    api_key  = config.GROQ_API_KEY if use_groq else (config.CEREBRAS_API_KEYS[0] if config.CEREBRAS_API_KEYS else None)
     if not api_key:
-        logging.warning("⚠️ [AI Rerank] Sin clave Cerebras disponible, omitiendo re-ranking")
+        logging.warning("[AI Rerank] Sin clave disponible, omitiendo re-ranking")
         return candidates[:target_n]
 
-    logging.info(f"🤖 [AI Rerank v2] Evaluando TODOS los {len(pool)} candidatos con IA...")
+    endpoint = config.GROQ_ENDPOINT if use_groq else config.CEREBRAS_ENDPOINT
+    model    = config.GROQ_MODEL    if use_groq else config.CEREBRAS_MODEL
+    provider = "Groq 70B" if use_groq else "Cerebras 8B"
+
+    logging.info(f"🤖 [AI Rerank v3.1 | {provider}] Evaluando {len(pool)} candidatos → garantiza {target_n} arts...")
+
+    # Construir bloque de criterios del investigador
+    criteria_block = ""
+    inc_lines = [l.strip() for l in inclusion_criteria.strip().splitlines() if l.strip()] if inclusion_criteria else []
+    exc_lines = [l.strip() for l in exclusion_criteria.strip().splitlines() if l.strip()] if exclusion_criteria else []
+    if inc_lines:
+        criteria_block += "\nINCLUSION CRITERIA (article MUST meet ALL):\n" + "\n".join(f"- {c}" for c in inc_lines)
+    if exc_lines:
+        criteria_block += "\nEXCLUSION CRITERIA (score 1-3 if ANY criterion is met):\n" + "\n".join(f"- {c}" for c in exc_lines)
 
     def score_article(art: Dict) -> float:
-        """Puntua 1-10 segun relevancia directa. Penaliza dominios cruzados."""
         title    = art.get('title', '')[:150]
         abstract = art.get('abstract', '')[:500]
-
         prompt = (
-            f'Research question: "{original_question}"\n\n'
-            f'Title: "{title}"\n'
+            f'You are a systematic literature review expert.\n'
+            f'Research question: "{original_question}"'
+            + (criteria_block if criteria_block else '') +
+            f'\n\nArticle title: "{title}"\n'
             f'Abstract: "{abstract}"\n\n'
-            'Rate how DIRECTLY and SPECIFICALLY this article addresses the research question.\n'
-            'Score 1-10 (be STRICT):\n'
-            '- 9-10: Core topic match + empirical results/experiments measuring the exact impact\n'
-            '- 7-8: Directly studies the topic with clear methodology and findings\n'
-            '- 5-6: Related topic but lacks specificity, empirical data, or direct alignment\n'
-            '- 1-4: Wrong domain, tangential, or does not address the research question directly\n\n'
-            'MANDATORY EXCLUSION RULES (score 1-2):\n'
-            '- Article is about medicine, biology, education, physics, automotive, finance, or ANY '
-            'domain other than software/computer engineering\n'
-            '- Article uses AI but in a DIFFERENT domain than the research question\n'
-            '- Article is a general overview with no specific findings about the research question\n\n'
-            'Respond ONLY with valid JSON: {"score": N}'
+            'Score relevance 1-10 (be STRICT and ACADEMIC):\n'
+            '- 9-10: Directly and empirically addresses the research question with clear methods and results\n'
+            '- 7-8: Clearly relevant, presents specific findings or framework on the topic\n'
+            '- 5-6: Tangentially related or lacks empirical rigor for this specific question\n'
+            '- 1-4: Wrong domain, off-topic, or does not address the research question\n'
+            + (f'\nApply exclusion criteria strictly: if ANY exclusion criterion is met, score 1-3.\n' if exc_lines else '') +
+            '\nRespond ONLY with valid JSON: {"score": N}'
         )
         try:
             resp = requests.post(
-                config.CEREBRAS_ENDPOINT,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": config.CEREBRAS_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 20,
-                    "temperature": 0.0
-                },
-                timeout=15
+                endpoint,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={"model": model, "messages": [{"role": "user", "content": prompt}],
+                      "max_tokens": 20, "temperature": 0.0},
+                timeout=20
             )
+            if resp.status_code == 429:
+                time.sleep(3)
+                raise Exception("Rate limited")
             content = resp.json()["choices"][0]["message"]["content"].strip()
             match = re.search(r'\{\s*"score"\s*:\s*(\d+)\s*\}', content)
             if match:
                 return float(match.group(1))
-            data = json.loads(content)
-            return float(data.get("score", 5))
+            return float(json.loads(content).get("score", 5))
         except Exception as e:
-            logging.debug(f"🔹 [AI Rerank] Error: '{title[:35]}': {e}")
-            return 5.0  # Score neutro si falla (no excluir por error de red)
+            logging.debug(f"[AI Rerank] Error '{title[:35]}': {e}")
+            return 5.0
 
-    # Evaluar TODOS los articulos con workers concurrentes
+    # Evaluar con batches + rate limiting para Groq (30 req/min free tier)
     ai_raw_scores: dict = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(score_article, art): i for i, art in enumerate(pool)}
-        for future in as_completed(futures):
-            idx = futures[future]
-            try:
-                ai_raw_scores[idx] = future.result()
-            except Exception:
-                ai_raw_scores[idx] = 5.0
+    pool_items  = list(enumerate(pool))
+    batch_size  = max_workers
 
-    # Aplicar scores y corte duro (min 7/10)
-    qualified = []
-    excluded  = 0
+    for batch_start in range(0, len(pool_items), batch_size):
+        batch = pool_items[batch_start: batch_start + batch_size]
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(score_article, art): idx for idx, art in batch}
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    ai_raw_scores[idx] = future.result()
+                except Exception:
+                    ai_raw_scores[idx] = 5.0
+        # Pausa entre batches para respetar rate limit de Groq
+        if use_groq and batch_start + batch_size < len(pool_items):
+            time.sleep(2.5)
+
+    # Anotar score en cada artículo
     for i, art in enumerate(pool):
         ai_score = ai_raw_scores.get(i, 5.0)
         art['ai_relevance_score'] = round(ai_score, 1)
         art['ai_evaluated']       = True
+        art['similarity']         = round(ai_score / 10.0, 4)  # % display = opinión IA
 
-        if ai_score < min_ai_score:
-            excluded += 1
-            continue  # EXCLUIR del pool
+    # Separar: primero los "buenos" (≥ soft_cutoff), luego el resto como relleno
+    good_arts = sorted([a for a in pool if a.get('ai_relevance_score', 0) >= soft_cutoff],
+                       key=lambda x: x.get('similarity', 0), reverse=True)
+    fill_arts = sorted([a for a in pool if a.get('ai_relevance_score', 0) < soft_cutoff],
+                       key=lambda x: x.get('similarity', 0), reverse=True)
 
-        # Score final = PURE AI (el % que ve el usuario = criterio de la IA)
-        # El fuzzy queda solo como pre-filtro, no contamina el display final
-        art['similarity'] = round(ai_score / 10.0, 4)
-        qualified.append(art)
-
-    qualified.sort(key=lambda x: x.get('similarity', 0), reverse=True)
+    # GARANTIZA target_n artículos: buenos primero, relleno si necesario
+    result = good_arts[:target_n]
+    if len(result) < target_n:
+        needed = target_n - len(result)
+        result.extend(fill_arts[:needed])
+        logging.info(f"   📦 Relleno: {min(needed, len(fill_arts))} artículos adicionales para completar {target_n}")
 
     ai_avg = np.mean(list(ai_raw_scores.values())) if ai_raw_scores else 0
     logging.info(
-        f"✅ [AI Rerank v2.1] Completado | Evaluados: {len(pool)} | "
-        f"Excluidos (AI<{min_ai_score}): {excluded} | "
-        f"Calificados: {len(qualified)} | Score IA promedio: {ai_avg:.1f}/10"
+        f"✅ [AI Rerank v3.1 | {provider}] Evaluados: {len(pool)} | "
+        f"Calificados (≥{soft_cutoff}): {len(good_arts)} | "
+        f"Total final: {len(result)} | Score IA promedio: {ai_avg:.1f}/10"
     )
-
-    return qualified[:target_n]
-
-
+    return result
