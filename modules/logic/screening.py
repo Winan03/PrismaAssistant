@@ -612,7 +612,7 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
 
 
 # ============================================================
-# AI ABSTRACT RE-RANKER (v1.0)
+# AI ABSTRACT RE-RANKER (v2.0 - TOTAL EVALUATION + HARD CUTOFF)
 # ============================================================
 
 def ai_rerank_abstracts(
@@ -620,17 +620,19 @@ def ai_rerank_abstracts(
     original_question: str,
     target_n: int = 100,
     candidate_pool: int = 150,
-    high_confidence_threshold: float = 0.75,
-    max_workers: int = 5,
+    min_ai_score: float = 5.0,   # Corte duro: articulos con AI < 5/10 son EXCLUIDOS
+    max_workers: int = 8,
 ) -> List[Dict]:
     """
-    Re-rankea candidatos usando IA para evaluar relevancia directa de abstracts.
+    Re-rankea candidatos usando IA como arbitro principal de relevancia.
 
-    Estrategia de dos zonas:
-    - Articulos con hybrid_score >= high_confidence_threshold: pasan sin evaluacion IA
-    - Articulos en zona ambigua: evaluados con Cerebras llama3.1-8b (score 1-10)
+    v2.0 vs v1.0:
+    - TODOS los articulos son evaluados (antes solo la zona ambigua)
+    - Corte duro: articulos con AI score < min_ai_score son excluidos del pool
+    - Pesos AI-first: 65% AI + 35% fuzzy (antes 50/50)
+    - Prompt mejorado: penaliza explicitamente dominios cruzados
 
-    Score final = 0.5 * hybrid_fuzzy + 0.5 * (ai_score / 10)
+    Score final = 0.65 * (ai_score/10) + 0.35 * fuzzy_hybrid
     """
     pool = candidates[:candidate_pool]
     if not pool:
@@ -641,29 +643,28 @@ def ai_rerank_abstracts(
         logging.warning("⚠️ [AI Rerank] Sin clave Cerebras disponible, omitiendo re-ranking")
         return candidates[:target_n]
 
-    # Separar zona confiable (no necesita IA) de zona ambigua
-    confident  = [a for a in pool if a.get('similarity', 0) >= high_confidence_threshold]
-    ambiguous  = [a for a in pool if a.get('similarity', 0) <  high_confidence_threshold]
-
-    logging.info(
-        f"🤖 [AI Rerank] Zona confiable: {len(confident)} | "
-        f"Zona ambigua a evaluar: {len(ambiguous)} artículos"
-    )
+    logging.info(f"🤖 [AI Rerank v2] Evaluando TODOS los {len(pool)} candidatos con IA...")
 
     def score_article(art: Dict) -> float:
-        """Puntua un articulo 1-10 segun relevancia directa a la pregunta de investigacion."""
+        """Puntua 1-10 segun relevancia directa. Penaliza dominios cruzados."""
         title    = art.get('title', '')[:150]
-        abstract = art.get('abstract', '')[:450]
+        abstract = art.get('abstract', '')[:500]
 
         prompt = (
             f'Research question: "{original_question}"\n\n'
-            f'Article: "{title}"\n'
+            f'Title: "{title}"\n'
             f'Abstract: "{abstract}"\n\n'
-            'Rate the DIRECT relevance of this article to the research question (1-10).\n'
-            '- 9-10: Directly and specifically addresses the exact topic with evidence\n'
-            '- 7-8: Highly relevant, main topic matches\n'
-            '- 4-6: Partially relevant, related field\n'
-            '- 1-3: Only tangentially related or different domain\n\n'
+            'Does this article SPECIFICALLY and DIRECTLY address the research question?\n'
+            'Score 1-10:\n'
+            '- 8-10: Directly studies this exact topic with empirical/experimental results\n'
+            '- 5-7: Clearly relevant, main topic overlaps significantly\n'
+            '- 1-4: Off-topic, wrong domain, or only tangentially related\n\n'
+            'CRITICAL RULES:\n'
+            '- If the article is about medicine, biology, agriculture, education, physics, '
+            'automotive, or any field OTHER than software/computer science: score 1-2\n'
+            '- If the article uses AI but applies it to a DIFFERENT DOMAIN than the research '
+            'question: score 1-3\n'
+            '- Only score >= 5 if the article is DIRECTLY about the research question topic\n\n'
             'Respond ONLY with valid JSON: {"score": N}'
         )
         try:
@@ -682,38 +683,51 @@ def ai_rerank_abstracts(
                 timeout=15
             )
             content = resp.json()["choices"][0]["message"]["content"].strip()
-            # Extraer JSON (a veces el modelo escribe texto extra)
             match = re.search(r'\{\s*"score"\s*:\s*(\d+)\s*\}', content)
             if match:
-                return float(match.group(1)) / 10.0
+                return float(match.group(1))
             data = json.loads(content)
-            return float(data.get("score", 5)) / 10.0
+            return float(data.get("score", 5))
         except Exception as e:
-            logging.debug(f"🔹 [AI Rerank] Error scoring '{title[:35]}': {e}")
-            return 0.5  # Score neutro si falla
+            logging.debug(f"🔹 [AI Rerank] Error: '{title[:35]}': {e}")
+            return 5.0  # Score neutro si falla (no excluir por error de red)
 
-    # Evaluar zona ambigua con workers concurrentes
-    if ambiguous:
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(score_article, art): i for i, art in enumerate(ambiguous)}
-            for future in as_completed(futures):
-                idx = futures[future]
-                try:
-                    ai_score = future.result()
-                except Exception:
-                    ai_score = 0.5
+    # Evaluar TODOS los articulos con workers concurrentes
+    ai_raw_scores: dict = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(score_article, art): i for i, art in enumerate(pool)}
+        for future in as_completed(futures):
+            idx = futures[future]
+            try:
+                ai_raw_scores[idx] = future.result()
+            except Exception:
+                ai_raw_scores[idx] = 5.0
 
-                hybrid = ambiguous[idx].get('similarity', 0.5)
-                # Score combinado: 50% fuzzy + 50% IA
-                ambiguous[idx]['similarity']         = round((hybrid * 0.5) + (ai_score * 0.5), 4)
-                ambiguous[idx]['ai_relevance_score'] = round(ai_score * 10, 1)  # guardar score 1-10
-                ambiguous[idx]['ai_evaluated']       = True
+    # Aplicar scores y corte duro
+    qualified = []
+    excluded  = 0
+    for i, art in enumerate(pool):
+        ai_score = ai_raw_scores.get(i, 5.0)
+        art['ai_relevance_score'] = round(ai_score, 1)
+        art['ai_evaluated']       = True
 
-        ai_avg = np.mean([a.get('ai_relevance_score', 5) for a in ambiguous])
-        logging.info(f"✅ [AI Rerank] Completado | Score IA promedio zona ambigua: {ai_avg:.1f}/10")
+        if ai_score < min_ai_score:
+            excluded += 1
+            continue  # EXCLUIR del pool
 
-    # Reunir todo y ordenar por score final combinado
-    all_scored = confident + ambiguous
-    all_scored.sort(key=lambda x: x.get('similarity', 0), reverse=True)
+        fuzzy_hybrid = art.get('similarity', 0.5)
+        # AI-first: 65% IA + 35% fuzzy
+        art['similarity'] = round((ai_score / 10.0) * 0.65 + fuzzy_hybrid * 0.35, 4)
+        qualified.append(art)
 
-    return all_scored[:target_n]
+    qualified.sort(key=lambda x: x.get('similarity', 0), reverse=True)
+
+    ai_avg = np.mean(list(ai_raw_scores.values())) if ai_raw_scores else 0
+    logging.info(
+        f"✅ [AI Rerank v2] Completado | Evaluados: {len(pool)} | "
+        f"Excluidos (AI<{min_ai_score}): {excluded} | "
+        f"Calificados: {len(qualified)} | Score IA promedio: {ai_avg:.1f}/10"
+    )
+
+    return qualified[:target_n]
+

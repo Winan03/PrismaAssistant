@@ -99,13 +99,12 @@ VOYAGE_API_KEY = os.getenv("VOYAGE_API_KEY")
 MONGODB_URI = os.getenv("MONGODB_URI")
 ENABLE_MONGODB = os.getenv("ENABLE_MONGODB", "False").lower() == "true"
 MILVUS_URI = "chroma_db"
-MILVUS_COLLECTION = os.getenv("MILVUS_COLLECTION", "articles_collection_v6")  # v6: all-mpnet-base-v2 768-dim
+MILVUS_COLLECTION = os.getenv("MILVUS_COLLECTION", "articles_collection_v7")  # v7: back to 384-dim MiniLM (velocidad)
 
-# v18.0: Volviendo a all-mpnet-base-v2 (110M, 768-dim) para mayor calidad semántica
-# El AI Re-ranker compensa el mayor tiempo de indexado con mejor precisión final.
-# Benchmark interno: all-mpnet-base-v2 > all-MiniLM-L6-v2 para papers académicos.
-EMBEDDING_MODEL = "all-mpnet-base-v2"
-EMBEDDING_DIM = 768
+# v18.1: Revertido a all-MiniLM-L6-v2 (22M, 384-dim) — all-mpnet tomaba 31 min en CPU.
+# La calidad se compensa con el AI Re-ranker (evaluacion de abstracts con Cerebras).
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+EMBEDDING_DIM = 384
 
 # ========================================
 # ✅ THRESHOLDS

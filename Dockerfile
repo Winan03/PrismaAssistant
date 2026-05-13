@@ -18,8 +18,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Pre-descargar el modelo de embeddings durante el BUILD
-# v18.0: all-mpnet-base-v2 (110M params, 768-dim) — mejor calidad semantica para papers academicos
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-mpnet-base-v2'); print('Modelo all-mpnet-base-v2 descargado')"
+# v18.1: all-MiniLM-L6-v2 (22M params, 384-dim) — rapido en CPU, calidad compensada por AI Re-ranker
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2'); print('Modelo all-MiniLM-L6-v2 descargado')"
 
 # Copiar codigo de la app
 COPY . .
