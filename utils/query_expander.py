@@ -635,11 +635,42 @@ Output ONLY this JSON format:
         )
         return output
 
-    # Fallback: usar extract_english_terms como base
+    # ── Fallback: construir sinónimos estructurados básicos ──
+    # Cuando el LLM falla, construimos un dict mínimo de sinónimos
+    # agrupado por concepto para que concept_presence_filter pueda funcionar.
+    # Se filtran acrónimos cortos para no envenenar BM25.
     logging.warning("⚠️ [Synonyms] LLM falló, usando fallback de términos técnicos")
-    fallback_terms = extract_english_terms(question)
+    fallback_terms_raw = extract_english_terms(question)
+
+    # Filtrar acrónimos problemáticos del fallback
+    _BAD_ACRONYMS = {'ia', 'st', 'ai', 'qa', 'ml', 'dl', 'se', 'it', 'is', 'rq', 'nn', 'cv'}
+    fallback_terms = [
+        t for t in fallback_terms_raw
+        if len(t.strip()) >= 3
+        and t.strip().lower() not in _BAD_ACRONYMS
+        and not (t.strip().isupper() and len(t.strip()) <= 3)
+    ]
+    logging.info(f"   🔑 Términos técnicos (EN, filtrados): {fallback_terms}")
+
+    # Construir synomyms agrupados: cada término de 3+ palabras es un "concepto"
+    # Los términos cortos son "sinónimos" del primer concepto largo que encontremos
+    synonyms_structured: Dict[str, List[str]] = {}
+    long_terms   = [t for t in fallback_terms if len(t.split()) >= 2]
+    short_terms  = [t for t in fallback_terms if len(t.split()) == 1]
+
+    if long_terms:
+        for lt in long_terms:
+            synonyms_structured[lt] = []
+        # Distribuir los términos cortos como sinónimos del primer concepto largo
+        if short_terms and long_terms:
+            synonyms_structured[long_terms[0]].extend(short_terms)
+    elif short_terms:
+        # Solo hay términos cortos: usar el más largo como concepto principal
+        primary = max(short_terms, key=len)
+        synonyms_structured[primary] = [t for t in short_terms if t != primary]
+
     return {
-        "synonyms": {},
+        "synonyms": synonyms_structured,   # ← Ahora tiene estructura, no vacío
         "flat_terms": fallback_terms,
         "expanded_queries": fallback_terms[:3],
     }

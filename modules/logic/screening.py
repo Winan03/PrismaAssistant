@@ -17,6 +17,40 @@ from utils.bm25_retriever import compute_hybrid_scores
 from modules.ai.cross_encoder_reranker import rerank_with_cross_encoder
 
 # ============================================================
+# FILTRO DE TERMINOS SEGUROS PARA BM25
+# Bloquea acrónimos cortos y ambiguos que envenenan el índice léxico
+# Ejemplos problemáticos: 'IA', 'ST', 'AI' → coinciden con todo
+# ============================================================
+_MIN_TERM_LENGTH = 3   # Mínimo de caracteres para entrar al BM25
+_BLOCKED_ACRONYMS = {  # Lista explícita de siglas problemáticas
+    'ia', 'st', 'ai', 'qa', 'ml', 'dl', 'se', 'it', 'is', 'db', 'ui', 'ux',
+    'ci', 'cd', 'os', 'io', 'id', 'ip', 'nn', 'tf', 'cv', 'rq',
+}
+
+def _filter_safe_terms(terms: List[str]) -> List[str]:
+    """
+    Elimina términos cortos y acrónimos ambiguos que envenenan el índice BM25.
+    Reglas:
+      1. Ignorar si len <= 2 chars
+      2. Ignorar si es acrónimo de máximo 3 chars en la lista negra
+      3. Ignorar si es todo mayúsculas con <= 3 chars (acrónimo genérico)
+    """
+    result = []
+    for t in terms:
+        t_clean = t.strip()
+        if not t_clean:
+            continue
+        if len(t_clean) < _MIN_TERM_LENGTH:
+            continue  # Muy corto → ruido
+        if t_clean.lower() in _BLOCKED_ACRONYMS:
+            continue  # Acrónimo conocido problemático
+        if t_clean.isupper() and len(t_clean) <= 3:
+            continue  # Acrónimo genérico desconocido (ALL-CAPS ≤ 3 chars)
+        result.append(t_clean)
+    return result
+
+
+# ============================================================
 # CONFIGURACION DEL MODELO (UNIFICADO VIA embedding_service)
 # ============================================================
 MODEL_NAME = config.EMBEDDING_MODEL
@@ -484,8 +518,14 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
         all_bm25_queries = list(set(semantic_queries + synonym_queries))
 
         english_terms = extract_english_terms(enriched_query)
-        # Enriquecer english_terms con sinónimos para keyword boost
-        english_terms = list(set(english_terms + synonym_terms))[:20]
+        # ── Filtrar acrónimos ambiguos ANTES de BM25 (Bug Fix) ──
+        # Acrónimos como 'IA', 'ST', 'AI' indexan todo el corpus y anulan BM25
+        english_terms = _filter_safe_terms(list(set(english_terms + synonym_terms)))[:20]
+        synonym_terms  = _filter_safe_terms(synonym_terms)  # También para keyword boost
+        if synonym_terms != synonym_data.get('flat_terms', []):
+            blocked = set(synonym_data.get('flat_terms', [])) - set(synonym_terms)
+            if blocked:
+                logging.info(f"🚫 [BM25 Filter] Acrónimos bloqueados del índice: {blocked}")
         
         exclusion_terms = get_exclusion_terms_with_llm(original_q)
         # Combinar exclusiones: LLM + manuales del investigador
@@ -616,13 +656,20 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
     final_selection.sort(key=lambda x: x.get('similarity', 0), reverse=True)
 
     # ── CAPA 4: CROSS-ENCODER RE-RANKING (top-50 candidatos) ──
-    # Procesa query + artículo JUNTOS en una red de atención cruzada.
-    # Mucho más preciso que bi-encoders para detectar relevancia real.
-    if original_question:
+    # IMPORTANTE: ms-marco-MiniLM espera una query CORTA EN INGLÉS.
+    # Nunca pasarle la RQ en español ni queries largas → scores 0.000.
+    # Se usa `query` (ya traducido al inglés por translate_question_to_english)
+    # truncado a las primeras 12 palabras para optimizar el modelo.
+    ce_query = query  # 'query' ya es la versión en inglés (traducida en main.py)
+    if ce_query:
+        ce_words = ce_query.split()
+        if len(ce_words) > 12:
+            ce_query = " ".join(ce_words[:12])  # Truncar: el CE pierde calidad con queries largas
         logging.info(f"🎯 Cross-Encoder: re-rankeando top-50 de {len(final_selection)} candidatos...")
+        logging.info(f"   CE query (EN, ≤12 words): '{ce_query}'")
         final_selection = rerank_with_cross_encoder(
             candidates=final_selection,
-            query=original_question,
+            query=ce_query,
             top_n=50,
             batch_size=16,
         )
