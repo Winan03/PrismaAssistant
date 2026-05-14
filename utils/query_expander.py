@@ -10,7 +10,7 @@ import json
 import re
 import os
 import hashlib
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 # Cache
 CACHE_DIR = ".cache"
@@ -72,17 +72,27 @@ def _build_api_prompt(question: str) -> str:
 
 Research Question: "{question}"
 
-STRATEGY: Generate 6 SHORT search queries (5-7 words each) covering these key perspectives:
-1. THE METHODS: Core tools or techniques mentioned (e.g., "LLM vulnerability detection").
-2. THE PROBLEM (PURE): The specific issue WITHOUT mentioning the new method (e.g., "static analysis false positives reduction"). This is critical to find baseline papers.
-3. THE OUTCOME: The measured improvement or target metric (e.g., "alert noise reduction").
-4. ALTERNATIVES: Synonyms or related technical concepts (e.g., "AI code audit security").
+CRITICAL FIRST STEP — Determine the RESEARCH DIRECTION:
+A) "AI/ML APPLIED TO Software Testing" (using AI to automate, improve, or assist testing)
+B) "Testing/Validation OF AI/ML Systems" (how to test or verify AI models themselves)
+C) Both directions are equally central to the research question
+
+Select the direction(s) that match the research question, then generate queries ONLY for that direction.
+
+STRATEGY: Generate 6 SHORT search queries (5-7 words each):
+1. THE METHOD/TOOL: Specific AI technique used (e.g., "LLM-based test generation").
+2. THE APPLICATION: The specific testing problem WITHOUT the AI method (e.g., "regression test selection automation").
+3. THE OUTCOME: The measured result or metric (e.g., "test coverage improvement AI").
+4. ALTERNATIVES: Synonyms or adjacent concepts that researchers use in papers.
 
 RULES:
-- Each query MUST combine at least 2 concepts (e.g., Method + Problem).
+- Each query MUST combine at least 2 concepts.
 - Output ONLY valid JSON: {{"queries": ["query1", "query2", ...]}}
 - ALL queries MUST be in ENGLISH.
 - NO boolean operators, no quotes, plain text only.
+- USE directional connectors: "for", "using", "applied to", "to automate"
+  Direction A example: "machine learning for software test case generation"
+  Direction B example: "testing machine learning model robustness validation"
 
 JSON Output:"""
 
@@ -474,6 +484,165 @@ def _clean_question_for_search(question: str) -> str:
     }
     words = [w for w in clean.split() if w.lower() not in stopwords and len(w) > 1]
     return " ".join(words[:10])
+
+
+# ============================================================
+# EXPANSIÓN SEMÁNTICA CON SINÓNIMOS (equivalente a WordNet + Corpus)
+# ============================================================
+
+def expand_query_with_synonyms(
+    question: str,
+    corpus_sample: Optional[List[str]] = None,
+) -> Dict:
+    """
+    Genera sinónimos, acrónimos y jerga científica equivalente para los
+    términos clave de la RQ. Equivalente al WordNet + Corpus Semántico
+    recomendado por el profesor.
+
+    Estrategia:
+      1. Extrae los conceptos clave de la RQ
+      2. Pide al LLM generar variantes científicas en inglés
+      3. Opcionalmente, adapta al vocabulario del corpus recibido
+      4. Retorna términos enriquecidos para inyectar en BM25
+
+    Args:
+        question:      Pregunta de investigación (cualquier idioma)
+        corpus_sample: Muestra de abstracts del corpus (opcional, para
+                       adaptar el vocabulario al dominio específico)
+
+    Returns:
+        Dict con:
+          - "synonyms":  términos sinónimos por concepto clave
+          - "flat_terms": lista plana de todos los términos para BM25
+          - "expanded_queries": queries enriquecidas con sinónimos
+    """
+    # Cache con prefijo distinto para no mezclar con expand_query_with_llm
+    cache_key_raw = f"synonyms_v1_{question.strip().lower()}"
+    cache_key = hashlib.md5(cache_key_raw.encode()).hexdigest()
+    cache_path = os.path.join(CACHE_DIR, f"syn_{cache_key}.json")
+
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, 'r', encoding='utf-8') as f:
+                cached = json.load(f)
+            logging.info(f"🔑 [Synonyms] Cargado de caché: {len(cached.get('flat_terms', []))} términos")
+            return cached
+        except Exception:
+            pass
+
+    # Construir corpus hint si se proporcionó muestra
+    corpus_hint = ""
+    if corpus_sample:
+        # Tomar una muestra representativa (max 5 abstracts, 200 chars c/u)
+        samples = [s[:200] for s in corpus_sample[:5] if s]
+        if samples:
+            corpus_hint = (
+                "\n\nCORPUS SAMPLE (use these to adapt terminology to the domain):\n"
+                + "\n---\n".join(samples)
+            )
+
+    system_msg = (
+        "You are a systematic review librarian and domain expert. "
+        "Generate a comprehensive synonym expansion for academic search. "
+        "Output ONLY valid JSON, no explanations."
+    )
+
+    user_prompt = f"""Research Question: "{question}"{corpus_hint}
+
+For each KEY CONCEPT in the research question, generate:
+1. The main concept in English
+2. All scientific synonyms, acronyms, and equivalent terms used in academic papers
+3. Specific sub-types or variants relevant to this domain
+
+RULES:
+- ALL terms must be in English
+- Include domain-specific acronyms (e.g., SAST, LLM, NLP, EHR)
+- Include both formal terms and common abbreviations
+- Focus on terms that would appear in academic paper titles/abstracts
+- Each term should be 1-4 words maximum
+
+Output ONLY this JSON format:
+{{
+  "concepts": [
+    {{
+      "main": "main concept name",
+      "synonyms": ["synonym1", "synonym2", "acronym1", "variant1"]
+    }}
+  ],
+  "cross_terms": ["term that combines 2+ concepts", "compound term2"]
+}}"""
+
+    result = None
+    for try_func in [_try_github_models, _try_groq, _try_huggingface]:
+        raw = try_func(user_prompt, system_msg)
+        if raw:
+            result = raw
+            break
+
+    # Procesar resultado del LLM
+    if result and isinstance(result, dict) and "concepts" in result:
+        concepts = result.get("concepts", [])
+        cross_terms = result.get("cross_terms", [])
+
+        # Construir lista plana de todos los términos
+        flat_terms = []
+        synonyms_by_concept = {}
+        for concept in concepts:
+            main = concept.get("main", "")
+            syns = concept.get("synonyms", [])
+            if main:
+                flat_terms.append(main)
+                synonyms_by_concept[main] = syns
+            flat_terms.extend(syns)
+
+        flat_terms.extend(cross_terms)
+
+        # Deduplicar y limpiar
+        seen = set()
+        flat_clean = []
+        for t in flat_terms:
+            t_clean = str(t).strip().lower()
+            if t_clean and t_clean not in seen and len(t_clean) >= 2:
+                seen.add(t_clean)
+                flat_clean.append(str(t).strip())
+
+        # Construir queries enriquecidas (combinando concepto principal + sinónimos)
+        expanded_queries = []
+        for concept in concepts:
+            main = concept.get("main", "")
+            syns = concept.get("synonyms", [])[:3]  # Top 3 sinónimos
+            if main and syns:
+                # Query: "main synonym1 synonym2"
+                expanded_queries.append(f"{main} {' '.join(syns)}")
+        expanded_queries.extend(cross_terms[:3])
+
+        output = {
+            "synonyms": synonyms_by_concept,
+            "flat_terms": flat_clean,
+            "expanded_queries": expanded_queries,
+        }
+
+        # Guardar en caché
+        try:
+            with open(cache_path, 'w', encoding='utf-8') as f:
+                json.dump(output, f, ensure_ascii=False)
+        except Exception:
+            pass
+
+        logging.info(
+            f"🌐 [Synonyms] Expansión completada: {len(flat_clean)} términos únicos | "
+            f"{len(synonyms_by_concept)} conceptos | {len(expanded_queries)} queries enriquecidas"
+        )
+        return output
+
+    # Fallback: usar extract_english_terms como base
+    logging.warning("⚠️ [Synonyms] LLM falló, usando fallback de términos técnicos")
+    fallback_terms = extract_english_terms(question)
+    return {
+        "synonyms": {},
+        "flat_terms": fallback_terms,
+        "expanded_queries": fallback_terms[:3],
+    }
 
 
 def expand_query(question: str, max_terms: int = 12) -> List[str]:

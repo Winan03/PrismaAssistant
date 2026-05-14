@@ -40,6 +40,7 @@ fuzzywuzzy==0.18.0
 python-levenshtein==0.25.1
 pandas==2.2.2
 biopython==1.81
+rank-bm25>=0.2.2
 
 # --- BASES DE DATOS ---
 pymongo==4.8.0

@@ -10,8 +10,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 import requests
 import config
 from modules.ai.embedding_service import get_embeddings, get_single_embedding
-from utils.query_expander import expand_query_with_llm, extract_english_terms, get_exclusion_terms_with_llm
+from utils.query_expander import expand_query_with_llm, extract_english_terms, get_exclusion_terms_with_llm, expand_query_with_synonyms
 from modules.core.search_engine import detect_search_domain
+from modules.logic.metadata_filter import apply_hard_filters, parse_exclusion_criteria_for_hard_filter
+from utils.bm25_retriever import compute_hybrid_scores
+from modules.ai.cross_encoder_reranker import rerank_with_cross_encoder
 
 # ============================================================
 # CONFIGURACION DEL MODELO (UNIFICADO VIA embedding_service)
@@ -402,16 +405,37 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
                     max_results: int = 50, original_question: str = "",
                     inclusion_criteria: str = "", exclusion_criteria: str = "") -> List[Dict]:
     """
-    Filtra articulos usando SPECTER2 + filtro de relevancia de dominio.
+    Pipeline híbrido de screening para Revisiones Sistemáticas PRISMA.
 
-    ESTRATEGIA:
-    1. Calcula similitud semantica (SPECTER2)
-    2. Calcula relevancia de dominio (keywords de la pregunta)
-    3. Score ajustado = similitud - penalizacion_dominio
-    4. Filtra con umbral minimo
-    5. Prioriza articulos CON URL/PDF
+    ARQUITECTURA DE 5 CAPAS:
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Capa 0: Hard Filter por metadatos (pre-vectorial)
+            → Excluye artículos sin abstract, fuera de rango temporal, etc.
+    Capa 1: BM25 léxico + Embeddings semánticos → Fusión RRF
+            → BM25 castiga artículos sin la terminología exacta de la RQ
+            → RRF favorece artículos que aparecen bien en AMBOS rankings
+    Capa 2: Expansión de consulta con sinónimos LLM (WordNet moderno)
+            → Enriquece la consulta BM25 con sinónimos científicos del dominio
+    Capa 3: Fuzzy Mamdani (similitud semántica × relevancia dominio × keywords)
+    Capa 4: Cross-Encoder (re-ranking preciso sobre top-50 candidatos)
+    Capa 5: LLM-as-a-Judge estricto (Cerebras) con justificación obligatoria
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     """
     if not articles:
+        return []
+
+    # ============================================================
+    # CAPA 0: HARD FILTER POR METADATOS (Pre-Vectorial)
+    # ============================================================
+    min_year, extra_excl_terms = parse_exclusion_criteria_for_hard_filter(exclusion_criteria)
+    articles, hard_filter_report = apply_hard_filters(
+        articles,
+        min_year=min_year,
+        min_abstract_length=80,   # Excluir artículos sin abstract útil
+        extra_exclusion_terms=extra_excl_terms,
+    )
+    if not articles:
+        logging.warning("⚠️ Hard Filter eliminó todos los artículos. Verifica los criterios de exclusión.")
         return []
 
 
@@ -447,8 +471,21 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
                 logging.info(f"🚫 [Criterios E] {len(manual_exclusion_terms)} criterios de exclusión detectados")
 
 
+        # ── CAPA 2: Expansión con Sinónimos LLM (WordNet moderno) ──
+        # Genera sinónimos científicos ANTES de calcular BM25 para enriquecer la búsqueda
+        corpus_sample = [f"{a.get('title','')}. {a.get('abstract','')[:150]}" for a in articles[:10]]
+        synonym_data = expand_query_with_synonyms(original_q, corpus_sample=corpus_sample)
+        synonym_terms   = synonym_data.get('flat_terms', [])
+        synonym_queries = synonym_data.get('expanded_queries', [])
+        logging.info(f"🌐 [Synonyms] {len(synonym_terms)} términos expandidos para BM25")
+
         semantic_queries = expand_query_with_llm(enriched_query)
+        # Enriquecer queries semánticas con las queries de sinónimos
+        all_bm25_queries = list(set(semantic_queries + synonym_queries))
+
         english_terms = extract_english_terms(enriched_query)
+        # Enriquecer english_terms con sinónimos para keyword boost
+        english_terms = list(set(english_terms + synonym_terms))[:20]
         
         exclusion_terms = get_exclusion_terms_with_llm(original_q)
         # Combinar exclusiones: LLM + manuales del investigador
@@ -459,25 +496,33 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
             poles_str = " vs ".join([p[0] for p in comparison_poles])
             logging.info(f"⚖️ Polos de comparación detectados: {poles_str}")
 
-        logging.info(f"🌎 Screening con {len(semantic_queries)} queries y {len(exclusion_terms)} filtros de exclusión...")
+        logging.info(f"🌎 Screening con {len(semantic_queries)} queries semánticas + {len(synonym_queries)} queries de sinónimos")
 
-        # 2. Scoring Multi-Query con numpy (sin PyTorch)
-        # Encode todos los abstracts una vez
-        corpus_embeddings = get_embeddings(texts)  # shape: (n_articles, 768)
+        # ── CAPA 1A: Scoring de Embeddings ──
+        corpus_embeddings = get_embeddings(texts)  # shape: (n_articles, 384)
         
-        # Calcular scores por cada query
         all_query_scores = []
         for q in semantic_queries:
-            q_emb = get_single_embedding(q)  # shape: (768,)
-            q_scores = cosine_similarity([q_emb], corpus_embeddings)[0]  # (n_articles,)
+            q_emb = get_single_embedding(q)
+            q_scores = cosine_similarity([q_emb], corpus_embeddings)[0]
             all_query_scores.append(q_scores)
             
-        all_query_scores = np.array(all_query_scores) # (n_queries, n_articles)
+        all_query_scores = np.array(all_query_scores)  # (n_queries, n_articles)
         
-        # Combinación Probabilística: Max (70%) + Mean (30%)
         max_scores = np.max(all_query_scores, axis=0)
         mean_scores = np.mean(all_query_scores, axis=0)
-        final_raw_scores = (max_scores * 0.7) + (mean_scores * 0.3)
+        embedding_raw_scores = (max_scores * 0.7) + (mean_scores * 0.3)
+
+        # ── CAPA 1B: BM25 Léxico + RRF Fusion ──
+        rrf_scores, bm25_raw_scores = compute_hybrid_scores(
+            texts=texts,
+            embedding_scores=embedding_raw_scores,
+            semantic_queries=all_bm25_queries,
+            weight_embedding=0.6,
+            weight_bm25=0.4,
+        )
+        # El score final de la Capa 1 es el RRF fusionado
+        final_raw_scores = rrf_scores
 
         # 🧠 DETECTAR DOMINIO para validación suave
         domain_results = detect_search_domain(original_question or query)
@@ -545,33 +590,45 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
             art['domain_relevance'] = 1.0
 
     # ============================================================
-    # ESTRATEGIA DE SELECCION V5 - FUZZY-FIRST RANKING
+    # ESTRATEGIA DE SELECCION V6 - FUZZY-FIRST + CROSS-ENCODER
     # ============================================================
-    # El hybrid_score (60% fuzzy + 40% normalizado) es el criterio principal.
-    # El RAW_SCORE_FLOOR (0.20) solo excluye articulos absolutamente off-topic.
-    # Esto garantiza siempre llegar a max_results=100.
 
-    # 1. Excluir solo los absolutamente irrelevantes (raw < 0.20)
+    # 1. Excluir los absolutamente irrelevantes (raw < 0.20)
     eligible = [a for a in articles if a.get('raw_similarity', 0) >= RAW_SCORE_FLOOR]
     
     # 2. Ordenar por hybrid_score (ranking fuzzy-first)
     eligible.sort(key=lambda x: x.get('similarity', 0), reverse=True)
 
     raw_above_floor = len(eligible)
-    logging.info(f"🔍 Candidatos (raw≥{RAW_SCORE_FLOOR}): {len(articles)} → {raw_above_floor} | Seleccionando Top-{max_results} por hybrid_score")
+    logging.info(f"🔍 Candidatos (raw≥{RAW_SCORE_FLOOR}): {raw_above_floor} | Pre-CE top-{max_results}")
 
     # 3. Priorizar artículos con URL válida dentro del top-N
     with_url    = [a for a in eligible if a.get('url') and len(str(a.get('url'))) > 10]
     without_url = [a for a in eligible if not (a.get('url') and len(str(a.get('url'))) > 10)]
 
-    # Tomar top-N combinando con_url primero, luego sin_url para completar
-    final_selection = with_url[:max_results]
-    if len(final_selection) < max_results:
-        needed = max_results - len(final_selection)
+    # Tomar top-200 para Cross-Encoder (necesita un pool mayor)
+    ce_pool_size = min(200, len(eligible))
+    final_selection = with_url[:ce_pool_size]
+    if len(final_selection) < ce_pool_size:
+        needed = ce_pool_size - len(final_selection)
         final_selection.extend(without_url[:needed])
 
-    # Mantener orden por hybrid_score tras combinar
     final_selection.sort(key=lambda x: x.get('similarity', 0), reverse=True)
+
+    # ── CAPA 4: CROSS-ENCODER RE-RANKING (top-50 candidatos) ──
+    # Procesa query + artículo JUNTOS en una red de atención cruzada.
+    # Mucho más preciso que bi-encoders para detectar relevancia real.
+    if original_question:
+        logging.info(f"🎯 Cross-Encoder: re-rankeando top-50 de {len(final_selection)} candidatos...")
+        final_selection = rerank_with_cross_encoder(
+            candidates=final_selection,
+            query=original_question,
+            top_n=50,
+            batch_size=16,
+        )
+
+    # Recortar al tamaño objetivo después del Cross-Encoder
+    final_selection = final_selection[:max_results * 2]  # Pool 2x para el AI-Judge
 
     # ============================================================
     # AI ABSTRACT RE-RANKER (v1.0)
@@ -653,16 +710,22 @@ def ai_criteria_screening_full(
         title    = art.get('title', '')[:150]
         abstract = art.get('abstract', '')[:500]
         prompt = (
+            f'You are a strict academic screener for a PRISMA systematic literature review.\n'
             f'Research question: "{question}"\n\n'
             f'{criteria_block}'
             f'Article title: "{title}"\n'
             f'Abstract: "{abstract}"\n\n'
-            'Evaluate this article for a systematic literature review:\n'
-            '"include": true  = meets ALL inclusion criteria AND violates NO exclusion criterion\n'
-            '"include": false = fails ANY inclusion criterion OR meets ANY exclusion criterion\n'
-            '"score": 1-10   = relevance score if included (use 1-3 if excluded)\n\n'
-            'Be strict: if the abstract does NOT clearly confirm an inclusion criterion, set include=false.\n\n'
-            'Respond ONLY with valid JSON: {"include": true, "score": 8}'
+            'EVALUATION PROTOCOL (LLM-as-a-Judge):\n'
+            '1. For EACH inclusion criterion, find a SPECIFIC PHRASE in the abstract that confirms it.\n'
+            '   If you cannot quote a specific phrase → the criterion is NOT met → include=false.\n'
+            '2. For EACH exclusion criterion, check if the abstract matches ANY of them.\n'
+            '   If it matches even ONE → include=false.\n'
+            '3. "score" reflects how STRONGLY the article meets ALL criteria (1-10).\n\n'
+            'STRICT RULES:\n'
+            '- include=true ONLY if ALL inclusion criteria are confirmed by explicit text in the abstract.\n'
+            '- If the abstract is ambiguous or vague, set include=false (benefit of the doubt goes to exclusion).\n'
+            '- Reviews, surveys, meta-analyses, and state-of-the-art papers score 1-3.\n\n'
+            'Respond ONLY with valid JSON: {"include": true, "score": 8, "reason": "one-line justification"}'
         )
         try:
             resp = requests.post(
@@ -670,7 +733,7 @@ def ai_criteria_screening_full(
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                 json={"model": config.CEREBRAS_MODEL,
                       "messages": [{"role": "user", "content": prompt}],
-                      "max_tokens": 30, "temperature": 0.0},
+                      "max_tokens": 80, "temperature": 0.0},
                 timeout=15
             )
             content = resp.json()["choices"][0]["message"]["content"].strip()

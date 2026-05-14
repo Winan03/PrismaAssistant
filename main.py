@@ -40,9 +40,10 @@ from modules.core.report_generator import create_pdf_report
 from modules.ai import rag_pipeline, synthesis, screening_ai
 from modules.ai.ai_model import init_model
 from utils import pdf_extractor
-from utils.query_expander import expand_query, generate_api_queries_with_llm
+from utils.query_expander import expand_query, generate_api_queries_with_llm, expand_query_with_synonyms
 from utils.export import export_to_csv
 from utils.eval_screening import evaluate_results
+from modules.logic.metadata_filter import concept_presence_filter
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -293,6 +294,34 @@ async def initial_search(request: Request, background_tasks: BackgroundTasks, qu
     
     if not articles:
         return HTMLResponse("<h1>No se encontraron artículos. Intenta ampliar tus términos.</h1>")
+
+    # ============================================================
+    # FILTRO DE PRESENCIA DE CONCEPTOS (Post-API, Pre-ChromaDB)
+    # Elimina artículos que no tocan los conceptos clave de la RQ
+    # ANTES de indexar en ChromaDB. Reduce ~878 → ~300-400.
+    # ============================================================
+    try:
+        synonym_data = expand_query_with_synonyms(question)
+        if synonym_data.get("synonyms"):
+            n_concepts = len(synonym_data["synonyms"])
+            # min_concepts: moderado (N-1 de N) para no ser demasiado restrictivo
+            # Con 3 conceptos: requiere 2 de 3
+            min_req = max(2, n_concepts - 1)
+            articles, cp_report = concept_presence_filter(
+                articles,
+                synonym_data=synonym_data,
+                min_concepts_required=min_req,
+            )
+            logging.info(
+                f"🔬 [Concept Filter] Corpus pre-ChromaDB: "
+                f"{cp_report['total']} → {cp_report['passed']} artículos "
+                f"({cp_report['reduction_pct']}% reducción)"
+            )
+        else:
+            logging.info("ℹ️ [Concept Filter] Sin datos de sinónimos, omitiendo")
+    except Exception as e:
+        logging.warning(f"⚠️ [Concept Filter] Error (no crítico): {e}")
+    # ============================================================
     
     articles = [normalize_article_for_csv(a) for a in articles]
 
