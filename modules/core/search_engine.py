@@ -678,38 +678,43 @@ def search_articles(query_terms: List[str], max_results: int = 600,
     
     openalex_concept = None
 
+    target_per_source = max(1000, max_results // 4)
+
     if domain == 'cs':
         openalex_concept = "C41008148" # Computer Science
+        target_cs = max(1500, max_results // 2)
         sources_config = {
-            'Semantic Scholar': {'target': 400, 'fieldsOfStudy': 'Computer Science'},
-            'OpenAlex': {'target': 400},
+            'Semantic Scholar': {'target': target_cs, 'fieldsOfStudy': 'Computer Science'},
+            'OpenAlex': {'target': target_cs},
         }
     elif domain == 'medical':
         openalex_concept = "C71924100" # Medicine
         sources_config = {
-            'Semantic Scholar': {'target': 200, 'fieldsOfStudy': 'Medicine'},
-            'PubMed': {'target': 200},
-            'OpenAlex': {'target': 200},
-            'Europe PMC': {'target': 200},
+            'Semantic Scholar': {'target': target_per_source, 'fieldsOfStudy': 'Medicine'},
+            'PubMed': {'target': target_per_source},
+            'OpenAlex': {'target': target_per_source},
+            'Europe PMC': {'target': target_per_source},
         }
     elif domain == 'law':
         openalex_concept = "C199539241" # Law
+        target_law = max(1500, max_results // 2)
         sources_config = {
-            'Semantic Scholar': {'target': 300},
-            'OpenAlex': {'target': 300},
+            'Semantic Scholar': {'target': target_law},
+            'OpenAlex': {'target': target_law},
         }
     elif domain == 'architecture':
         openalex_concept = "C13184196" # Architecture
+        target_arch = max(1500, max_results // 2)
         sources_config = {
-            'Semantic Scholar': {'target': 300},
-            'OpenAlex': {'target': 300},
+            'Semantic Scholar': {'target': target_arch},
+            'OpenAlex': {'target': target_arch},
         }
     else:
         sources_config = {
-            'Semantic Scholar': {'target': 200},
-            'PubMed': {'target': 200},
-            'OpenAlex': {'target': 200},
-            'Europe PMC': {'target': 200},
+            'Semantic Scholar': {'target': target_per_source},
+            'PubMed': {'target': target_per_source},
+            'OpenAlex': {'target': target_per_source},
+            'Europe PMC': {'target': target_per_source},
         }
 
     # Eliminada inyección manual de términos por dominio (causa ruido en APIs)
