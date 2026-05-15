@@ -10,7 +10,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import requests
 import config
 from modules.ai.embedding_service import get_embeddings, get_single_embedding
-from utils.query_expander import expand_query_with_llm, extract_english_terms, get_exclusion_terms_with_llm, expand_query_with_synonyms
+from utils.query_expander import expand_query_with_llm, extract_english_terms, extract_english_terms_with_llm, get_exclusion_terms_with_llm, expand_query_with_synonyms
 from modules.core.search_engine import detect_search_domain
 from modules.logic.metadata_filter import apply_hard_filters, parse_exclusion_criteria_for_hard_filter
 from utils.bm25_retriever import compute_hybrid_scores
@@ -22,18 +22,13 @@ from modules.ai.cross_encoder_reranker import rerank_with_cross_encoder
 # Ejemplos problemáticos: 'IA', 'ST', 'AI' → coinciden con todo
 # ============================================================
 _MIN_TERM_LENGTH = 3   # Mínimo de caracteres para entrar al BM25
-_BLOCKED_ACRONYMS = {  # Lista explícita de siglas problemáticas
-    'ia', 'st', 'ai', 'qa', 'ml', 'dl', 'se', 'it', 'is', 'db', 'ui', 'ux',
-    'ci', 'cd', 'os', 'io', 'id', 'ip', 'nn', 'tf', 'cv', 'rq',
-}
 
 def _filter_safe_terms(terms: List[str]) -> List[str]:
     """
-    Elimina términos cortos y acrónimos ambiguos que envenenan el índice BM25.
+    Elimina términos cortos y ambiguos que envenenan el índice BM25.
     Reglas:
       1. Ignorar si len <= 2 chars
-      2. Ignorar si es acrónimo de máximo 3 chars en la lista negra
-      3. Ignorar si es todo mayúsculas con <= 3 chars (acrónimo genérico)
+      2. Ignorar si es todo mayúsculas con <= 3 chars (acrónimo genérico)
     """
     result = []
     for t in terms:
@@ -42,8 +37,6 @@ def _filter_safe_terms(terms: List[str]) -> List[str]:
             continue
         if len(t_clean) < _MIN_TERM_LENGTH:
             continue  # Muy corto → ruido
-        if t_clean.lower() in _BLOCKED_ACRONYMS:
-            continue  # Acrónimo conocido problemático
         if t_clean.isupper() and len(t_clean) <= 3:
             continue  # Acrónimo genérico desconocido (ALL-CAPS ≤ 3 chars)
         result.append(t_clean)
@@ -64,68 +57,9 @@ def get_embedding(text: str) -> np.ndarray:
 # EXTRACCION DE KEYWORDS DE DOMINIO
 # ============================================================
 
-# Palabras metodologicas que NO distinguen dominio (Genéricas)
-METHODOLOGY_TERMS = {
-    'machine learning', 'deep learning', 'artificial intelligence', 'ai',
-    'neural network', 'model', 'algorithm', 'classification', 'prediction',
-    'analysis', 'method', 'approach', 'technique', 'system',
-    'framework', 'evaluation', 'comparison', 'review', 'survey', 'study',
-    'transformer', 'attention', 'embedding', 'training', 'dataset',
-    'accuracy', 'precision', 'recall', 'f1', 'performance', 'optimization',
-    'hyperparameter', 'tuning', 'preprocessing', 'feature', 'extraction',
-    'regression', 'random forest', 'xgboost', 'lstm', 'cnn', 'rnn', 'gru',
-    'bayesian', 'probabilistic', 'stochastic', 'ensemble', 'boosting',
-    'cross-validation', 'overfitting', 'generalization', 'benchmark',
-    'error', 'reduction', 'improvement',
-    'automated', 'automatic', 'intelligent', 'smart', 'adaptive',
-    'nlp', 'natural language processing', 'text mining', 'sentiment',
-    'supervised', 'unsupervised', 'reinforcement', 'transfer learning',
-    'fine-tuning', 'pre-trained',
-}
-
-# Stopwords en espanol e ingles
-STOPWORDS = {
-    'cual', 'como', 'que', 'es', 'son', 'las', 'los',
-    'del', 'de', 'la', 'el', 'en', 'un', 'una', 'para', 'por', 'con', 'sin',
-    'sobre', 'entre', 'mas', 'se', 'al', 'a', 'e', 'i', 'o', 'u', 'y',
-    'su', 'sus', 'mi', 'tu', 'frente', 'durante', 'mediante',
-    'the', 'an', 'and', 'or', 'not', 'in', 'on', 'of', 'to', 'for',
-    'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had',
-    'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might',
-    'this', 'that', 'these', 'those', 'with', 'from', 'by', 'at', 'as',
-    'their', 'its', 'what', 'which', 'how', 'when', 'where', 'who', 'whom',
-    'medida', 'eficacia', 'reducen', 'margen', 'base',
-    'herramientas', 'tradicionales', 'modelos', 'grandes', 'lenguaje',
-}
-
-# Traducciones espanol-ingles para terminos de dominio comunes
-DOMAIN_TRANSLATIONS = {
-    'codigo fuente': 'source code',
-    'codigo': 'code',
-    'vulnerabilidades': 'vulnerability',
-    'vulnerabilidad': 'vulnerability',
-    'analisis estatico': 'static analysis',
-    'falsos positivos': 'false positive',
-    'deteccion de vulnerabilidades': 'vulnerability detection',
-    'seguridad de software': 'software security',
-    'revision de codigo': 'code review',
-    'eventos deportivos': 'sports events',
-    'deportivos': 'sports',
-    'deportes': 'sports',
-    'predicciones deportivas': 'sports prediction',
-    'variables temporales': 'time series temporal',
-    'enfermedades cardiovasculares': 'cardiovascular disease',
-    'salud mental': 'mental health',
-    'educacion superior': 'higher education',
-    'energia renovable': 'renewable energy',
-    'internet de las cosas': 'internet of things iot',
-    'cadena de suministro': 'supply chain',
-    'redes neuronales': 'neural network',
-    'inteligencia artificial': 'artificial intelligence',
-    'aprendizaje profundo': 'deep learning',
-    'aprendizaje automatico': 'machine learning',
-}
-
+# Las listas hardcodeadas han sido eliminadas para mantener la herramienta 100% agnóstica.
+# Ahora se usa un LLM dinámicamente para filtrar stopwords y extraer términos.
+# para mantener la herramienta 100% agnóstica. Ahora se usa un LLM dinámicamente.
 
 # Eliminadas listas hardcoded (v6.1 - Dinamismo Puro)
 # Ahora los términos de exclusión se generan vía LLM específicamente para cada pregunta de investigación.
@@ -191,45 +125,14 @@ def extract_domain_keywords(question: str) -> Set[str]:
     domain_keywords = set()
     q_lower = strip_accents(question.lower())
 
-    # 1. Traducir frases compuestas espanol-ingles
-    for esp, eng in DOMAIN_TRANSLATIONS.items():
-        if esp in q_lower:
-            for word in eng.split():
-                if word.lower() not in METHODOLOGY_TERMS and len(word) > 2:
-                    domain_keywords.add(word.lower())
+    # 1. Traducir y extraer términos clave de dominio en inglés dinámicamente usando LLM
+    llm_terms = extract_english_terms_with_llm(question)
+    for term in llm_terms:
+        for word in term.split():
+            if len(word) > 2:
+                domain_keywords.add(word.lower())
 
-    # 2. Extraer acronimos (SAST, LLM, IoT, CNN, etc.)
-    acronyms = re.findall(r'\b([A-Z]{2,6}s?)\b', question)
-    skip_acronyms = {'AND', 'OR', 'NOT', 'THE', 'FOR', 'DE', 'LA', 'LOS', 'EN', 'DEL', 'UNA'}
-    for a in acronyms:
-        clean = a.rstrip('s').lower()
-        if clean.upper() not in skip_acronyms and clean not in METHODOLOGY_TERMS:
-            domain_keywords.add(clean)
-
-    # 3. Extraer palabras en ingles directas (de texto mixto espanol/ingles)
-    english_words = re.findall(r'\b([a-z]{3,})\b', q_lower)
-    for w in english_words:
-        if w not in STOPWORDS and w not in METHODOLOGY_TERMS and len(w) > 2:
-            spanish_common = {'como', 'para', 'pero', 'puede', 'porque', 'tiene',
-                            'cada', 'otro', 'otra', 'entre', 'desde',
-                            'hasta', 'sin', 'mejor', 'peor', 'mayor',
-                            'menor', 'parte', 'forma', 'modo', 'tipo', 'caso',
-                            'manera', 'vez', 'tiempo', 'punto', 'lado',
-                            'nivel', 'dentro', 'fuera', 'antes'}
-            if w not in spanish_common:
-                domain_keywords.add(w)
-
-    # 4. Extraer texto entre comillas o parentesis
-    quoted = re.findall(r'["\u00ab]([^"\u00bb]+)["\u00bb]', question)
-    for q in quoted:
-        for word in q.lower().split():
-            if word not in STOPWORDS and word not in METHODOLOGY_TERMS and len(word) > 2:
-                domain_keywords.add(word)
-
-    # 5. Limpiar
-    domain_keywords.discard('')
-
-    logging.info(f"🏷️ Keywords de dominio extraidos: {sorted(domain_keywords)}")
+    logging.info(f"🏷️ Keywords de dominio extraidos (via LLM): {sorted(domain_keywords)}")
     return domain_keywords
 
 
@@ -331,8 +234,10 @@ def compute_keyword_boost(article: Dict, english_terms: List[str],
         pole_b_present = any(term.lower() in content for term in comparison_poles[1])
         
         # Si falta CUALQUIERA de los dos polos, penalizar (Estudio no comparativo)
+        # RELAJADO: En RSLs incipientes, muchos estudios no tienen grupo de control tradicional.
+        # Se reduce el malus de 0.6 a 0.85 para no destruir el score de estudios exploratorios.
         if not pole_a_present or not pole_b_present:
-            base_boost *= 0.6 # Malus del 40%
+            base_boost *= 0.85 # Malus del 15% en lugar del 40%
             
     return base_boost
 
@@ -524,7 +429,7 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
         # Enriquecer queries semánticas con las queries de sinónimos
         all_bm25_queries = list(set(semantic_queries + synonym_queries))
 
-        english_terms = extract_english_terms(enriched_query)
+        english_terms = extract_english_terms_with_llm(enriched_query)
         # ── Filtrar acrónimos ambiguos ANTES de BM25 (Bug Fix) ──
         # Acrónimos como 'IA', 'ST', 'AI' indexan todo el corpus y anulan BM25
         english_terms = _filter_safe_terms(list(set(english_terms + synonym_terms)))[:20]

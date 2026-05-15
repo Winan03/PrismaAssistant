@@ -283,68 +283,54 @@ def extract_english_terms(question: str) -> List[str]:
     for q in quoted:
         _add(q)
     
-    # 4. Detectar frases técnicas en inglés dentro de texto español
-    # Patrones comunes: "Modelos de Lenguaje Grande" → "Large Language Model"
-    english_technical = {
-        'modelos de lenguaje': 'Large Language Model',
-        'modelo de lenguaje': 'Large Language Model',
-        'aprendizaje profundo': 'deep learning',
-        'aprendizaje automático': 'machine learning',
-        'aprendizaje de máquina': 'machine learning',
-        'inteligencia artificial': 'artificial intelligence',
-        'redes neuronales': 'neural network',
-        'red neuronal': 'neural network',
-        'procesamiento de lenguaje natural': 'natural language processing',
-        'análisis estático': 'static analysis',
-        'análisis de código': 'code analysis',
-        'código fuente': 'source code',
-        'vulnerabilidades': 'vulnerability',
-        'detección de vulnerabilidades': 'vulnerability detection',
-        'falsos positivos': 'false positive',
-        'falso positivo': 'false positive',
-        'seguridad informática': 'cybersecurity',
-        'seguridad de software': 'software security',
-        'revisión de código': 'code review',
-        'enfermedades cardiovasculares': 'cardiovascular disease',
-        'enfermedad cardiovascular': 'cardiovascular disease',
-        'insuficiencia cardíaca': 'heart failure',
-        'fibrilación auricular': 'atrial fibrillation',
-        'diagnóstico temprano': 'early diagnosis',
-        'detección temprana': 'early detection',
-        'diabetes': 'diabetes',
-        'cáncer': 'cancer',
-        'salud mental': 'mental health',
-        'educación superior': 'higher education',
-        'rendimiento académico': 'academic performance',
-        'cambio climático': 'climate change',
-        'energía renovable': 'renewable energy',
-        'internet de las cosas': 'Internet of Things',
-        'computación en la nube': 'cloud computing',
-        'cadena de suministro': 'supply chain',
-        'experiencia del usuario': 'user experience',
-        'interfaz de usuario': 'user interface',
-        'base de datos': 'database',
-        'minería de datos': 'data mining',
-        'ciencia de datos': 'data science',
-        'gemelo digital': 'digital twin',
-        'gemelos digitales': 'digital twin',
-        'realidad aumentada': 'augmented reality',
-        'realidad virtual': 'virtual reality',
-    }
-    
-    q_lower = question.lower()
-    for esp, eng in english_technical.items():
-        if esp in q_lower and eng.lower() not in seen:
-            _add(eng)
-    
-    # 5. Palabras en inglés que aparecen directamente en la pregunta
+    # 4. Palabras en inglés que aparecen directamente en la pregunta
     english_words_in_text = re.findall(r'\b([a-z]{2,}(?:\s+[a-z]{2,}){0,2})\b', question)
     for w in english_words_in_text:
         if w.lower() not in seen and _is_english_technical(w):
             _add(w)
     
-    logging.info(f"   🔑 Términos técnicos (EN): {terms[:8]}")
+    logging.info(f"   🔑 Términos técnicos fallback (EN): {terms[:8]}")
     return terms[:8]
+
+def extract_english_terms_with_llm(question: str) -> List[str]:
+    """
+    Extrae dinámicamente los términos técnicos y los traduce al inglés usando el LLM.
+    Mantiene la aplicación agnóstica al dominio sin diccionarios hardcodeados.
+    """
+    cache_key = hashlib.md5(f"eng_terms_v1_{question.strip().lower()}".encode()).hexdigest()
+    cache_path = os.path.join(CACHE_DIR, f"{cache_key}.json")
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, 'r', encoding='utf-8') as f:
+                cached = json.load(f)
+            return cached.get("terms", [])
+        except: pass
+
+    prompt = f"""Identify the core technical concepts and keywords from the following research question and translate them into English.
+DO NOT include generic stopwords or common verbs.
+Research Question: "{question}"
+
+Output ONLY a JSON object with this format:
+{{"terms": ["english term 1", "english term 2", "english term 3"]}}"""
+
+    system_msg = "You are a technical translator for academic search. Output valid JSON only."
+    
+    logging.info("🤖 [English Terms] Solicitando términos técnicos en inglés al LLM Router...")
+    terms = _call_llm_json(prompt, system_msg, return_dict=False)
+    
+    if terms:
+        # Limpiar y asegurar que sean válidos
+        clean_terms = [t for t in terms if isinstance(t, str) and len(t) > 2]
+        if clean_terms:
+            try:
+                with open(cache_path, 'w', encoding='utf-8') as f:
+                    json.dump({"question": question, "terms": clean_terms}, f)
+            except: pass
+            logging.info(f"   🔑 Términos técnicos extraídos por LLM (EN): {clean_terms}")
+            return clean_terms
+
+    # Fallback si el LLM falla
+    return extract_english_terms(question)
 
 
 def _is_english_technical(word: str) -> bool:
