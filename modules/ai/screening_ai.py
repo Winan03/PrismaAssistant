@@ -761,14 +761,15 @@ def translate_abstract_to_spanish(text: str) -> str:
 def translate_question_to_english(text: str) -> str:
     """Traduce pregunta de investigación a inglés"""
     try:
+        prompt = f"Translate this research question to English (preserve technical terms).\nOUTPUT ONLY THE TRANSLATED TEXT. Do not include introductory phrases like 'Here is the translation'. No yapping.\n\n{text}"
         response = client.models.generate_content(
             model=MODEL_NAME,
-            contents=f"Translate this research question to English (preserve technical terms):\n{text}",
+            contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.1,
                 max_output_tokens=200
             )
         )
-        return response.text
+        return response.text.strip()
     except:
         return text

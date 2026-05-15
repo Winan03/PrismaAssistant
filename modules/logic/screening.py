@@ -925,7 +925,8 @@ def ai_multicriteria_score(
             f'\nTitle: "{title}"\nAbstract: "{abstract}"\n\n'
             'Score this article on 3 dimensions (1-10 each):\n'
             '"i" (inclusion_fit): Does abstract clearly meet ALL inclusion criteria?\n'
-            '   10=clearly meets all, 5=partially, 1=fails or unclear\n'
+            '   10=clearly meets all, 1=fails, missing, or unclear. Be EXTREMELY strict.\n'
+            '   If in doubt whether ALL inclusion criteria are met, REJECT IT (Score = 1).\n'
             '   If no inclusion criteria given, score how relevant to the research question.\n'
             '"s" (study_type): Is this an EXPERIMENTAL/APPLIED study with real results?\n'
             '   9-10=has methodology+metrics+numerical results\n'
@@ -934,7 +935,8 @@ def ai_multicriteria_score(
             '   1-3=survey, review, mapping, state-of-the-art, meta-analysis\n'
             '   AUTO-RULE: Contains "review", "survey", "mapping", "state of the art" => score 1-3\n'
             '"e" (exclusion_match): Does it match ANY exclusion criterion?\n'
-            '   1=matches none, 5=partially, 10=clearly excluded\n\n'
+            '   1=matches none, 10=clearly excluded. Be EXTREMELY strict.\n'
+            '   If in doubt whether it matches an exclusion criterion, assume it is excluded (Score = 10).\n\n'
             'ONLY valid JSON: {"i": N, "s": N, "e": N}'
         )
         try:
