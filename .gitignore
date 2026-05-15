@@ -46,3 +46,8 @@ training/*.ipynb
 # OS
 Thumbs.db
 .DS_Store
+
+# Archivos de Evaluación y Despliegue Privados
+Implementacion_VPS/
+evaluation/
+guia_despliegue_vps.md.resolved
