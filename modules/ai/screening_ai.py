@@ -744,32 +744,49 @@ Escribe tu bloque <analisis> detallando qué encontraste y por qué, y luego tu 
 
 def translate_abstract_to_spanish(text: str) -> str:
     """Traduce abstract usando Gemini"""
-    try:
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=f"Traduce este abstract científico al español manteniendo términos técnicos:\n\n{text[:2000]}",
-            config=types.GenerateContentConfig(
-                temperature=0.1,
-                max_output_tokens=500
+    prompt = f"Traduce este abstract científico al español manteniendo términos técnicos:\n\n{text[:2000]}"
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    max_output_tokens=500
+                )
             )
-        )
-        return response.text
-    except:
-        return text
+            return response.text
+        except Exception as e:
+            logging.warning(f"⚠️ Error traduciendo abstract (intento {attempt+1}): {e}")
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt
+                time.sleep(wait_time)
+    
+    return text
 
 
 def translate_question_to_english(text: str) -> str:
     """Traduce pregunta de investigación a inglés"""
-    try:
-        prompt = f"Translate this research question to English (preserve technical terms).\nOUTPUT ONLY THE TRANSLATED TEXT. Do not include introductory phrases like 'Here is the translation'. No yapping.\n\n{text}"
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.1,
-                max_output_tokens=200
+    prompt = f"Translate this research question to English (preserve technical terms).\nOUTPUT ONLY THE TRANSLATED TEXT. Do not include introductory phrases like 'Here is the translation'. No yapping.\n\n{text}"
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    max_output_tokens=200
+                )
             )
-        )
-        return response.text.strip()
-    except:
-        return text
+            return response.text.strip()
+        except Exception as e:
+            logging.warning(f"⚠️ Error traduciendo pregunta a inglés (intento {attempt+1}): {e}")
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt
+                logging.info(f"🔄 Reintentando traducción en {wait_time}s...")
+                time.sleep(wait_time)
+                
+    logging.error("❌ Fallaron todos los intentos de traducción. Usando texto original (puede afectar al Cross-Encoder).")
+    return text
