@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import asyncio
+import contextvars
 from concurrent.futures import ThreadPoolExecutor
 
 # ============================================================
@@ -30,7 +31,7 @@ from typing import Optional, List, Dict
 from collections import Counter
 
 from fastapi import FastAPI, Form, Request, HTTPException, UploadFile, File, BackgroundTasks
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -47,12 +48,51 @@ from modules.logic.metadata_filter import concept_presence_filter
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+client_id_var = contextvars.ContextVar('client_id', default=None)
+progress_queues = {}
+
+class ProgressLogHandler(logging.Handler):
+    def emit(self, record):
+        cid = client_id_var.get()
+        if cid and cid in progress_queues:
+            msg = self.format(record)
+            try:
+                progress_queues[cid].put_nowait(msg)
+            except Exception:
+                pass
+
+logger = logging.getLogger()
+progress_handler = ProgressLogHandler()
+progress_handler.setFormatter(logging.Formatter('%(message)s'))
+logger.addHandler(progress_handler)
+
 for d in [".cache", ".cache/sessions", "logs", "static", "templates"]:
     os.makedirs(d, exist_ok=True)
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+@app.get("/progress/{client_id}")
+async def get_progress(client_id: str):
+    if client_id not in progress_queues:
+        progress_queues[client_id] = asyncio.Queue()
+    
+    async def event_generator():
+        try:
+            while True:
+                msg = await progress_queues[client_id].get()
+                if msg == "END_STREAM":
+                    break
+                msg = msg.replace('\n', ' ')
+                yield f"data: {msg}\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if client_id in progress_queues:
+                del progress_queues[client_id]
+                
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 # ============================================================
 # 🚦 CONTROL DE CONCURRENCIA PARA IA
@@ -285,14 +325,18 @@ async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/search", response_class=HTMLResponse)
-async def initial_search(request: Request, background_tasks: BackgroundTasks, question: str = Form(...)):
+async def initial_search(request: Request, background_tasks: BackgroundTasks, question: str = Form(...), client_id: str = Form(None)):
+    if client_id:
+        client_id_var.set(client_id)
     start = time.perf_counter()
     logging.info(f"📝 Nueva Búsqueda: {question}")
 
     terms = expand_query(question, max_terms=10)
-    articles, t_search, search_queries_used, raw_count = search_engine.search_articles(terms, max_results=3000, original_question=question)
+    articles, t_search, search_queries_used, raw_count = search_engine.search_articles(terms, max_results=10000, original_question=question)
     
     if not articles:
+        if client_id and client_id in progress_queues:
+            progress_queues[client_id].put_nowait("END_STREAM")
         return HTMLResponse("<h1>No se encontraron artículos. Intenta ampliar tus términos.</h1>")
 
     # ============================================================
@@ -314,8 +358,10 @@ async def initial_search(request: Request, background_tasks: BackgroundTasks, qu
                 min_req = n_concepts
             elif n_concepts <= 4:
                 min_req = 2
-            else:
+            elif n_concepts <= 6:
                 min_req = 3
+            else:
+                min_req = 4
             articles, cp_report = concept_presence_filter(
                 articles,
                 synonym_data=synonym_data,
@@ -386,6 +432,9 @@ async def initial_search(request: Request, background_tasks: BackgroundTasks, qu
          "flag": lang_meta.get(code, {}).get('flag', '🌐'), "count": count}
         for code, count in lang_counts.most_common()
     ]
+    if client_id and client_id in progress_queues:
+        progress_queues[client_id].put_nowait("END_STREAM")
+
     return templates.TemplateResponse("filters.html", {
         "request": request,
         "session_id": session_id,
@@ -475,9 +524,15 @@ async def apply_filters(request: Request, background_tasks: BackgroundTasks, ses
                         start_year: int = Form(2000), end_year: int = Form(2025),
                         open_access: Optional[str] = Form("false"),
                         inclusion_criteria: Optional[str] = Form(""),
-                        exclusion_criteria: Optional[str] = Form("")):
+                        exclusion_criteria: Optional[str] = Form(""),
+                        client_id: str = Form(None)):
     
+    if client_id:
+        client_id_var.set(client_id)
+
     if not session_exists(session_id):
+        if client_id and client_id in progress_queues:
+            progress_queues[client_id].put_nowait("END_STREAM")
         raise HTTPException(400, "Sesión expirada")
     
     data = get_session(session_id)
@@ -601,6 +656,9 @@ async def apply_filters(request: Request, background_tasks: BackgroundTasks, ses
     relevant = [normalize_article_for_csv(a, ai_keys) for a in relevant]
 
     save_session(session_id, data)
+
+    if client_id and client_id in progress_queues:
+        progress_queues[client_id].put_nowait("END_STREAM")
 
     return templates.TemplateResponse("screening.html", {
         "request": request,
@@ -797,9 +855,15 @@ async def upload_pdf_endpoint(
 async def submit_screening(request: Request):
     data = await request.json()
     session_id = int(data.get("sessionId"))
+    client_id = data.get("client_id")
+    
+    if client_id:
+        client_id_var.set(client_id)
     
     if not session_exists(session_id):
         logging.error(f"❌ Sesión {session_id} no encontrada")
+        if client_id and client_id in progress_queues:
+            progress_queues[client_id].put_nowait("END_STREAM")
         return JSONResponse({"error": "Sesión expirada o no válida"}, 400)
     
     session_data = get_session(session_id)
@@ -851,6 +915,9 @@ async def submit_screening(request: Request):
     avg_sim = sum(a.get('similarity', 0) for a in included) / len(included) if included else 0
     journals = set(a.get('journal') for a in included)
     
+    if client_id and client_id in progress_queues:
+        progress_queues[client_id].put_nowait("END_STREAM")
+        
     return templates.TemplateResponse("review.html", {
         "request": request, 
         "session_id": session_id,
@@ -874,9 +941,15 @@ async def generate_synthesis_endpoint(request: Request):
     data = await request.json()
     session_id = int(data.get("sessionId"))
     question = data.get("question")
+    client_id = data.get("client_id")
+    
+    if client_id:
+        client_id_var.set(client_id)
     
     # 1. Validaciones
     if not session_exists(session_id):
+        if client_id and client_id in progress_queues:
+            progress_queues[client_id].put_nowait("END_STREAM")
         return JSONResponse({"error": "Sesión no válida"}, 400)
     
     session_data = get_session(session_id)
@@ -984,6 +1057,9 @@ async def generate_synthesis_endpoint(request: Request):
         evaluate_results(included)
     except Exception as e:
         logging.warning(f"⚠️ Evaluación post-screening falló (no fatal): {e}")
+
+    if client_id and client_id in progress_queues:
+        progress_queues[client_id].put_nowait("END_STREAM")
 
     return templates.TemplateResponse("results.html", {
         "request": request,

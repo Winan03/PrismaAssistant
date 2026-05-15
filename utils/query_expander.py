@@ -395,7 +395,7 @@ def expand_query_with_synonyms(
           - "expanded_queries": queries enriquecidas con sinónimos
     """
     # Cache con prefijo distinto para no mezclar con expand_query_with_llm
-    cache_key_raw = f"synonyms_v1_{question.strip().lower()}"
+    cache_key_raw = f"synonyms_v2_{question.strip().lower()}"
     cache_key = hashlib.md5(cache_key_raw.encode()).hexdigest()
     cache_path = os.path.join(CACHE_DIR, f"syn_{cache_key}.json")
 
@@ -427,7 +427,7 @@ def expand_query_with_synonyms(
 
     user_prompt = f"""Research Question: "{question}"{corpus_hint}
 
-EXTRACT ONLY THE 2 TO 4 MOST FUNDAMENTAL CORE PILLARS of the research question (e.g., target population, main technology, primary outcome).
+EXTRACT ONLY THE 3 TO 6 MOST FUNDAMENTAL CORE PILLARS of the research question (e.g., target population, main technology, primary outcome).
 IGNORE highly specific edge constraints, ecological variables, or secondary contexts.
 
 For each of these CORE PILLARS, generate:
@@ -436,7 +436,7 @@ For each of these CORE PILLARS, generate:
 3. Specific sub-types or variants relevant to this domain
 
 RULES:
-- Extract MAXIMUM 4 concepts. Do not extract every detail.
+- Extract up to 6 concepts. Do not extract every detail.
 - ALL terms must be in English
 - Include domain-specific acronyms (e.g., SAST, LLM, NLP, EHR)
 - Include both formal terms and common abbreviations

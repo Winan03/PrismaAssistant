@@ -594,7 +594,7 @@
       }
     }
 
-    // ── Block submit if year error ──
+    // 🚨 Block submit if year error 🚨
     document.getElementById('filter-form').addEventListener('submit', function(e) {
       const startVal = String(document.getElementById('start_year').value);
       const endVal = String(document.getElementById('end_year').value);
@@ -604,8 +604,66 @@
         return;
       }
       const btn = document.getElementById('submit-btn');
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando artículos...';
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando artículos con IA...';
       btn.disabled = true;
+
+      // Generate client_id and add to form
+      const clientId = 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      const hiddenInput = document.createElement('input');
+      hiddenInput.type = 'hidden';
+      hiddenInput.name = 'client_id';
+      hiddenInput.value = clientId;
+      this.appendChild(hiddenInput);
+
+      // Terminal UI
+      const progressBox = document.createElement('div');
+      progressBox.style = "margin-top: 1.5rem; background: #0f172a; border-radius: 8px; font-family: monospace; font-size: 0.85rem; color: #38bdf8; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);";
+      
+      const terminalHeader = document.createElement('div');
+      terminalHeader.style = "background: #1e293b; padding: 8px 12px; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 8px; color: #94a3b8;";
+      terminalHeader.innerHTML = '<i class="fas fa-terminal"></i><span>Backend Logs</span><span style="margin-left:auto; display:flex; gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#ef4444;"></span><span style="width:10px;height:10px;border-radius:50%;background:#eab308;"></span><span style="width:10px;height:10px;border-radius:50%;background:#22c55e;"></span></span>';
+      
+      const terminalBody = document.createElement('div');
+      terminalBody.id = "progress-terminal";
+      terminalBody.style = "padding: 12px; height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; line-height: 1.4;";
+      terminalBody.innerHTML = '<div><span style="color:#22c55e;">➜</span> <span style="color:#94a3b8;">~</span> Inicializando conexión...</div>';
+      
+      progressBox.appendChild(terminalHeader);
+      progressBox.appendChild(terminalBody);
+      document.querySelector('.content').appendChild(progressBox);
+
+      // SSE Connection
+      const eventSource = new EventSource(`/progress/${clientId}`);
+      
+      eventSource.onmessage = function(event) {
+          if (event.data === "END_STREAM") {
+              eventSource.close();
+              if (Notification.permission === "granted") {
+                  new Notification("Cribado completado", {
+                      body: "Los resultados filtrados están listos para tu revisión.",
+                  });
+              }
+              return;
+          }
+          
+          const line = document.createElement('div');
+          line.innerHTML = `<span style="color:#22c55e;">➜</span> <span style="color:#94a3b8;">~</span> ${event.data}`;
+          terminalBody.appendChild(line);
+          terminalBody.scrollTop = terminalBody.scrollHeight;
+      };
+
+      eventSource.onerror = function() {
+          eventSource.close();
+      };
+    });
+
+    // Send Browser Notification if permitted
+    document.addEventListener('DOMContentLoaded', () => {
+        if (("Notification" in window) && Notification.permission === "granted") {
+            new Notification("Búsqueda Completada", {
+                body: "El sistema finalizó la recopilación inicial de artículos. Ya puedes aplicar tus criterios de cribado."
+            });
+        }
     });
   </script>
 </body>

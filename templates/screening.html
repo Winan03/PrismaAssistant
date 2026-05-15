@@ -593,7 +593,46 @@
           if (decisions.size === 0) { if (!confirm("No has incluido ningún artículo. ¿Continuar?")) return; }
           const btn = document.querySelector('.btn-finish');
           btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
-          let payload = { sessionId: SESSION_ID, question: RESEARCH_QUESTION, articles: {} };
+
+          // Generate client_id
+          const clientId = 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+          // Terminal UI
+          const progressBox = document.createElement('div');
+          progressBox.style = "margin-top: 1.5rem; background: #0f172a; border-radius: 8px; font-family: monospace; font-size: 0.85rem; color: #38bdf8; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); width: 100%;";
+          
+          const terminalHeader = document.createElement('div');
+          terminalHeader.style = "background: #1e293b; padding: 8px 12px; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 8px; color: #94a3b8;";
+          terminalHeader.innerHTML = '<i class="fas fa-terminal"></i><span>Backend Logs</span><span style="margin-left:auto; display:flex; gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#ef4444;"></span><span style="width:10px;height:10px;border-radius:50%;background:#eab308;"></span><span style="width:10px;height:10px;border-radius:50%;background:#22c55e;"></span></span>';
+          
+          const terminalBody = document.createElement('div');
+          terminalBody.id = "progress-terminal";
+          terminalBody.style = "padding: 12px; height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; line-height: 1.4;";
+          terminalBody.innerHTML = '<div><span style="color:#22c55e;">➜</span> <span style="color:#94a3b8;">~</span> Guardando selecciones...</div>';
+          
+          progressBox.appendChild(terminalHeader);
+          progressBox.appendChild(terminalBody);
+          btn.parentNode.insertBefore(progressBox, btn.nextSibling);
+
+          // SSE Connection
+          const eventSource = new EventSource(`/progress/${clientId}`);
+          
+          eventSource.onmessage = function(event) {
+              if (event.data === "END_STREAM") {
+                  eventSource.close();
+                  return;
+              }
+              const line = document.createElement('div');
+              line.innerHTML = `<span style="color:#22c55e;">➜</span> <span style="color:#94a3b8;">~</span> ${event.data}`;
+              terminalBody.appendChild(line);
+              terminalBody.scrollTop = terminalBody.scrollHeight;
+          };
+
+          eventSource.onerror = function() {
+              eventSource.close();
+          };
+
+          let payload = { sessionId: SESSION_ID, question: RESEARCH_QUESTION, client_id: clientId, articles: {} };
           articlesData.forEach((art, idx) => {
             let status = 'pending';
             const card = document.getElementById(`card-${idx}`);
@@ -662,6 +701,12 @@
         document.addEventListener('DOMContentLoaded', function () {
           const success = loadArticles();
           if (success) renderArticles();
+          
+          if (("Notification" in window) && Notification.permission === "granted") {
+              new Notification("Filtros Aplicados", {
+                  body: "El filtro de inteligencia artificial ha finalizado con éxito. Revisa tus resultados."
+              });
+          }
         });
       })();
     </script>
