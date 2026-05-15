@@ -290,7 +290,7 @@ async def initial_search(request: Request, background_tasks: BackgroundTasks, qu
     logging.info(f"📝 Nueva Búsqueda: {question}")
 
     terms = expand_query(question, max_terms=10)
-    articles, t_search, search_queries_used, raw_count = search_engine.search_articles(terms, max_results=1000, original_question=question)
+    articles, t_search, search_queries_used, raw_count = search_engine.search_articles(terms, max_results=3000, original_question=question)
     
     if not articles:
         return HTMLResponse("<h1>No se encontraron artículos. Intenta ampliar tus términos.</h1>")

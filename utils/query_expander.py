@@ -73,14 +73,18 @@ def _build_api_prompt(question: str) -> str:
 
 Research Question: "{question}"
 
-STRATEGY: Generate 6 SHORT semantic search queries (5-7 words each) that maximize RECALL for academic literature databases (PubMed, IEEE, OpenAlex).
-1. THE CORE SUBJECT: The main topic or target population (e.g., "preschoolers smart toys", "cardiovascular disease patients").
-2. THE INTERVENTION/METHOD: The specific technology or method applied (e.g., "multimodal artificial intelligence", "machine learning").
-3. THE OUTCOME: The measured result or metric (e.g., "playful interaction retention", "survival rate prediction").
-4. ALTERNATIVES: Synonyms or adjacent concepts that researchers use in papers.
+STRATEGY: Generate 6 ULTRA-SHORT, BROAD semantic search queries (2-4 words maximum) to cast a massive dragnet over academic literature databases (PubMed, IEEE, OpenAlex).
+Do NOT combine all concepts into one long query. Break the research question into independent pairs of broad keywords.
+
+EXAMPLES of good dragnet queries (from various random domains):
+- Domain A: "blockchain supply chain"
+- Domain A: "distributed ledger logistics"
+- Domain B: "myocardial infarction mortality"
+- Domain B: "heart attack survival"
+- Domain C: "quantum computing cryptography"
 
 RULES:
-- Each query MUST combine at least 2 core concepts.
+- Each query MUST BE MAXIMUM 3 or 4 WORDS. Do not write long sentences.
 - Output ONLY valid JSON: {{"queries": ["query1", "query2", ...]}}
 - ALL queries MUST be in ENGLISH, even if the research question is in another language.
 - NO boolean operators (AND/OR), no quotes, plain text only.
