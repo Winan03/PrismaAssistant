@@ -304,9 +304,18 @@ async def initial_search(request: Request, background_tasks: BackgroundTasks, qu
         synonym_data = expand_query_with_synonyms(question)
         if synonym_data.get("synonyms"):
             n_concepts = len(synonym_data["synonyms"])
-            # min_concepts: moderado (N-1 de N) para no ser demasiado restrictivo
-            # Con 3 conceptos: requiere 2 de 3
-            min_req = max(2, n_concepts - 1)
+            # El filtro conceptual es solo para eliminar basura (artículos fuera de dominio).
+            # Los abstracts son cortos (150-250 palabras) y rara vez contienen todos los conceptos explícitamente.
+            # Lógica relajada:
+            # - Si hay 1 o 2 conceptos: se piden todos (1 o 2).
+            # - Si hay 3 o 4 conceptos: se piden al menos 2.
+            # - Si hay 5 o más conceptos: se piden al menos 3.
+            if n_concepts <= 2:
+                min_req = n_concepts
+            elif n_concepts <= 4:
+                min_req = 2
+            else:
+                min_req = 3
             articles, cp_report = concept_presence_filter(
                 articles,
                 synonym_data=synonym_data,
