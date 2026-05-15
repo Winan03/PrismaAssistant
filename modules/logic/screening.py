@@ -437,7 +437,8 @@ def compute_fuzzy_score(semantic_sim: float, domain_rel: float, kw_boost_raw: fl
 
 def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
                     max_results: int = 50, original_question: str = "",
-                    inclusion_criteria: str = "", exclusion_criteria: str = "") -> List[Dict]:
+                    inclusion_criteria: str = "", exclusion_criteria: str = "",
+                    conservative: bool = False) -> List[Dict]:
     """
     Pipeline híbrido de screening para Revisiones Sistemáticas PRISMA.
 
@@ -452,9 +453,15 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
             → Enriquece la consulta BM25 con sinónimos científicos del dominio
     Capa 3: Fuzzy Mamdani (similitud semántica × relevancia dominio × keywords)
     Capa 4: Cross-Encoder (re-ranking preciso sobre top-50 candidatos)
-    Capa 5: LLM-as-a-Judge estricto (Cerebras) con justificación obligatoria
+    Capa 5: LLM-as-a-Judge (Cerebras) con justificación obligatoria
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    conservative=True → Modo RSL de alta sensibilidad (Oami et al. 2024):
+      - RAW_SCORE_FLOOR = 0.0 (todos los artículos reciben score)
+      - LLM-Judge: en caso de duda → INCLUIR (minimiza Falsos Negativos)
+      - Hard exclusion thresholds: relajados (FP aceptables, FN no)
     """
+
     if not articles:
         return []
 
@@ -573,12 +580,11 @@ def screen_articles(articles: List[Dict], query: str, threshold: float = 0.70,
         
         max_raw = np.max(final_raw_scores)
         
-        # --- UMBRAL MiNIMO DE CALIDAD (muy permisivo) ---
-        # Solo excluye articulos absolutamente irrelevantes (raw<0.20).
-        # El ranking real lo hace el hybrid_score (fuzzy+normalized).
-        # Esto garantiza siempre llegar a max_results=100.
+        # --- UMBRAL MINIMO DE CALIDAD ---
+        # conservative=True → floor=0.0 (evalúa TODOS los artículos, modo RSL)
+        # conservative=False → floor=0.20 (modo producción normal)
         corpus_size = len(articles)
-        RAW_SCORE_FLOOR = 0.20   # Piso minimo de calidad, no filtro de ranking
+        RAW_SCORE_FLOOR = 0.0 if conservative else 0.20
             
         logging.info(f"📊 Líder Raw: {max_raw:.3f} | RAW FLOOR mínimo: {RAW_SCORE_FLOOR} (corpus={corpus_size})")
         
@@ -757,21 +763,22 @@ def ai_criteria_screening_full(
         title    = art.get('title', '')[:150]
         abstract = art.get('abstract', '')[:500]
         prompt = (
-            f'You are a strict academic screener for a PRISMA systematic literature review.\n'
+            f'You are a conservative academic screener for a PRISMA systematic literature review.\n'
             f'Research question: "{question}"\n\n'
             f'{criteria_block}'
             f'Article title: "{title}"\n'
             f'Abstract: "{abstract}"\n\n'
-            'EVALUATION PROTOCOL (LLM-as-a-Judge):\n'
-            '1. For EACH inclusion criterion, find a SPECIFIC PHRASE in the abstract that confirms it.\n'
-            '   If you cannot quote a specific phrase → the criterion is NOT met → include=false.\n'
-            '2. For EACH exclusion criterion, check if the abstract matches ANY of them.\n'
-            '   If it matches even ONE → include=false.\n'
+            'EVALUATION PROTOCOL (LLM-as-a-Judge — CONSERVATIVE RSL MODE):\n'
+            '1. For EACH inclusion criterion, check if the abstract COULD plausibly address it.\n'
+            '   In RSL, it is worse to miss a relevant article than to include a borderline one.\n'
+            '2. For EACH exclusion criterion, it must CLEARLY and EXPLICITLY match to exclude.\n'
+            '   Do NOT exclude based on vague or partial similarity to an exclusion criterion.\n'
             '3. "score" reflects how STRONGLY the article meets ALL criteria (1-10).\n\n'
-            'STRICT RULES:\n'
-            '- include=true ONLY if ALL inclusion criteria are confirmed by explicit text in the abstract.\n'
-            '- If the abstract is ambiguous or vague, set include=false (benefit of the doubt goes to exclusion).\n'
-            '- Reviews, surveys, meta-analyses, and state-of-the-art papers score 1-3.\n\n'
+            'CONSERVATIVE RULES (Oami et al. 2024 protocol):\n'
+            '- include=true if the article is PLAUSIBLY relevant, even if not 100% confirmed.\n'
+            '- If the abstract is ambiguous or vague, set include=TRUE (benefit of the doubt goes to INCLUSION).\n'
+            '- Only include=false when the article CLEARLY does not match the research question.\n'
+            '- Reviews, surveys, meta-analyses score 1-3 on score, but may still have include=true.\n\n'
             'Respond ONLY with valid JSON: {"include": true, "score": 8, "reason": "one-line justification"}'
         )
         try:
@@ -980,11 +987,12 @@ def ai_multicriteria_score(
         art['ai_evaluated']       = True
         art['similarity']         = round(combined, 4)  # % display = score combinado
 
-        # Hard exclusion
+        # Hard exclusion (CONSERVATIVE MODE: umbrales relajados para maximizar recall)
+        # Basado en Oami et al. (2024): en RSL es peor un FN que un FP
         hard_exclude = (
-            s_score <= 3.0     # Es un survey/review
-            or e_score >= 6.0  # Viola criterio de exclusion
-            or i_score < 4.0   # No cumple criterios de inclusion
+            s_score <= 1.5     # Solo excluir surveys CLARAMENTE identificados (antes: <=3.0)
+            or e_score >= 9.0  # Solo excluir con criterio de exclusion MUY claro (antes: >=6.0)
+            or i_score < 2.0   # Solo excluir con relevancia CLARAMENTE nula (antes: <4.0)
         )
         (fill_pool if hard_exclude else qualified).append(art)
 

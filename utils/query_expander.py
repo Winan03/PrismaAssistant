@@ -11,6 +11,7 @@ import re
 import os
 import hashlib
 from typing import List, Optional, Dict
+from modules.ai.ai_model import generate_text
 
 # Cache
 CACHE_DIR = ".cache"
@@ -72,27 +73,18 @@ def _build_api_prompt(question: str) -> str:
 
 Research Question: "{question}"
 
-CRITICAL FIRST STEP — Determine the RESEARCH DIRECTION:
-A) "AI/ML APPLIED TO Software Testing" (using AI to automate, improve, or assist testing)
-B) "Testing/Validation OF AI/ML Systems" (how to test or verify AI models themselves)
-C) Both directions are equally central to the research question
-
-Select the direction(s) that match the research question, then generate queries ONLY for that direction.
-
-STRATEGY: Generate 6 SHORT search queries (5-7 words each):
-1. THE METHOD/TOOL: Specific AI technique used (e.g., "LLM-based test generation").
-2. THE APPLICATION: The specific testing problem WITHOUT the AI method (e.g., "regression test selection automation").
-3. THE OUTCOME: The measured result or metric (e.g., "test coverage improvement AI").
+STRATEGY: Generate 6 SHORT semantic search queries (5-7 words each) that maximize RECALL for academic literature databases (PubMed, IEEE, OpenAlex).
+1. THE CORE SUBJECT: The main topic or target population (e.g., "preschoolers smart toys", "cardiovascular disease patients").
+2. THE INTERVENTION/METHOD: The specific technology or method applied (e.g., "multimodal artificial intelligence", "machine learning").
+3. THE OUTCOME: The measured result or metric (e.g., "playful interaction retention", "survival rate prediction").
 4. ALTERNATIVES: Synonyms or adjacent concepts that researchers use in papers.
 
 RULES:
-- Each query MUST combine at least 2 concepts.
+- Each query MUST combine at least 2 core concepts.
 - Output ONLY valid JSON: {{"queries": ["query1", "query2", ...]}}
-- ALL queries MUST be in ENGLISH.
-- NO boolean operators, no quotes, plain text only.
-- USE directional connectors: "for", "using", "applied to", "to automate"
-  Direction A example: "machine learning for software test case generation"
-  Direction B example: "testing machine learning model robustness validation"
+- ALL queries MUST be in ENGLISH, even if the research question is in another language.
+- NO boolean operators (AND/OR), no quotes, plain text only.
+- USE natural phrasing or adjacent technical keywords.
 
 JSON Output:"""
 
@@ -113,37 +105,32 @@ def expand_query_with_llm(question: str) -> List[str]:
     prompt = _build_prompt(question)
     system_msg = _build_system_msg()
 
-    # Fallback chain
-    for try_func in [_try_github_models, _try_groq, _try_huggingface]:
-        queries = try_func(prompt, system_msg)
-        if queries:
-            save_to_cache(question, queries)
-            return queries
+    logging.info("🤖 [Query Gen] Solicitando queries al LLM Router...")
+    queries = _call_llm_json(prompt, system_msg, return_dict=False)
+    if queries:
+        save_to_cache(question, queries)
+        return queries
 
     return generate_fallback_queries(question)
 
 def get_exclusion_terms_with_llm(question: str) -> List[str]:
     """Identifica temas que suelen causar ruido para esta RQ específica (v7.8)."""
     prompt = f"""Identify 6-8 SHORT terms or topics (1-2 words max) that are SEMANTIC DISTRACTORS for this research question.
-A distractor is a topic that shares keywords (LLM, Security, etc.) but has a completely DIFFERENT GOAL.
+A distractor is a topic that shares SOME keywords but has a completely DIFFERENT context, domain, or goal.
 
 Research Question: "{question}"
 
-Examples of GOOD (Short) noise terms:
-- "watermarking" (if the goal is code audit)
-- "jailbreak" (if the goal is vulnerability detection)
-- "healthcare" (if the goal is software engineering)
-- "plagiarism" (if the goal is code generation)
+For example, if the research is about X applied to Y, what other completely unrelated fields (Z) also use X? Output those unrelated fields.
+DO NOT output terms that are relevant to the research question.
 
 Output ONLY valid JSON: {{"exclusions": ["term1", "term2", ... ]}}
 Terms MUST be 1-2 words only for strict keyword matching."""
     
     system_msg = "You are a research filter specialist. Identify out-of-context noise terms."
     
-    # Intento rápido con Groq o GitHub (fallback liviano)
-    for try_func in [_try_groq, _try_github_models]:
-        res = try_func(prompt, system_msg)
-        if res: return res # Reutilizamos _parse_llm_response que ahora busca "exclusions"
+    logging.info("🤖 [Exclusions] Solicitando términos distractores al LLM Router...")
+    res = _call_llm_json(prompt, system_msg, return_dict=False)
+    if res: return res
         
     return ["clinical", "patient", "medical"] # Fallback mínimo universal
 
@@ -162,157 +149,56 @@ def generate_api_queries_with_llm(question: str) -> List[str]:
     prompt = _build_api_prompt(question)
     system_msg = _build_system_msg()
 
-    # Fallback chain
-    for try_func in [_try_github_models, _try_groq, _try_huggingface]:
-        queries = try_func(prompt, system_msg)
-        if queries:
-            try:
-                with open(cache_path, 'w', encoding='utf-8') as f:
-                    json.dump({"question": question, "queries": queries}, f)
-            except: pass
-            return queries
+    logging.info("🤖 [API Queries] Solicitando queries al LLM Router...")
+    queries = _call_llm_json(prompt, system_msg, return_dict=False)
+    if queries:
+        try:
+            with open(cache_path, 'w', encoding='utf-8') as f:
+                json.dump({"question": question, "queries": queries}, f)
+        except: pass
+        return queries
 
     return generate_fallback_queries(question)
 
 
-def _parse_llm_response(content: str) -> List[str]:
-    """Parsea la respuesta JSON del LLM y extrae queries."""
+def _call_llm_json(prompt: str, system_msg: str, return_dict: bool = False):
+    """Llama al LLM usando el router multi-provider y parsea el JSON."""
+    # Añadimos instrucción para que devuelva JSON
+    instruction = prompt + "\n\nCRITICAL: You MUST output ONLY valid JSON format. Do not use markdown blocks like ```json."
+    
+    response = generate_text(instruction=instruction, input_text="", max_tokens=1024, system_prompt=system_msg)
+    if "Error de generación" in response or "⚠️" in response:
+        logging.warning(f"⚠️ [Query Gen] Error del LLM Router: {response}")
+        return None
+        
+    # Limpiar posibles bloques markdown
+    clean_resp = response.replace("```json", "").replace("```", "").strip()
+    
     try:
-        data = json.loads(content)
-        # Buscar en queries o exclusions
+        data = json.loads(clean_resp)
+        if return_dict:
+            return data
+        
+        # Para functions que esperan List[str] (queries o exclusions)
         queries = data.get("queries", data.get("exclusions", []))
         clean = [q for q in queries if q and len(q) > 2]
         if clean:
             return clean
+            
     except json.JSONDecodeError:
-        # Intentar extraer JSON de la respuesta
-        match = re.search(r'\{.*\}', content, re.DOTALL)
+        # Intentar extraer JSON con regex
+        match = re.search(r'\{.*\}', clean_resp, re.DOTALL)
         if match:
             try:
                 data = json.loads(match.group())
-                queries = data.get("queries", [])
-                return [q for q in queries if q and len(q) > 10]
+                if return_dict:
+                    return data
+                queries = data.get("queries", data.get("exclusions", []))
+                return [q for q in queries if q and len(q) > 2]
             except:
                 pass
-    return []
-
-
-def _try_github_models(prompt: str, system_msg: str) -> List[str]:
-    """Intenta generar queries con GitHub Models (Grok-3)."""
-    try:
-        if not getattr(config, 'GITHUB_MODELS_TOKEN', None):
-            return []
-        
-        logging.info("🤖 [Query Gen] Intentando con GitHub Models (Grok-3)...")
-        response = requests.post(
-            f"{config.GITHUB_MODELS_ENDPOINT}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {config.GITHUB_MODELS_TOKEN}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": config.PROMPT_GENERATION_MODEL,
-                "messages": [
-                    {"role": "system", "content": system_msg},
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.3,
-                "max_tokens": 600,
-                "response_format": {"type": "json_object"}
-            },
-            timeout=25
-        )
-        
-        if response.status_code == 200:
-            content = response.json()["choices"][0]["message"]["content"]
-            queries = _parse_llm_response(content)
-            if queries:
-                logging.info(f"   ✅ GitHub Models: {len(queries)} queries generadas")
-                return queries
-        else:
-            logging.warning(f"   ⚠️ GitHub Models respondió {response.status_code}")
-    except Exception as e:
-        logging.warning(f"   ⚠️ GitHub Models falló: {e}")
-    return []
-
-
-def _try_groq(prompt: str, system_msg: str) -> List[str]:
-    """Intenta generar queries con Groq."""
-    try:
-        groq_key = getattr(config, 'GROQ_API_KEY', None)
-        if not groq_key:
-            return []
-        
-        logging.info("🤖 [Query Gen] Intentando con Groq...")
-        response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {groq_key}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "llama-3.3-70b-versatile",
-                "messages": [
-                    {"role": "system", "content": system_msg},
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.3,
-                "max_tokens": 600,
-                "response_format": {"type": "json_object"}
-            },
-            timeout=25
-        )
-        
-        if response.status_code == 200:
-            content = response.json()["choices"][0]["message"]["content"]
-            queries = _parse_llm_response(content)
-            if queries:
-                logging.info(f"   ✅ Groq: {len(queries)} queries generadas")
-                return queries
-        else:
-            logging.warning(f"   ⚠️ Groq respondió {response.status_code}")
-    except Exception as e:
-        logging.warning(f"   ⚠️ Groq falló: {e}")
-    return []
-
-
-def _try_huggingface(prompt: str, system_msg: str) -> List[str]:
-    """Intenta generar queries con HuggingFace Router."""
-    try:
-        hf_token = getattr(config, 'HUGGINGFACE_TOKEN', None)
-        if not hf_token:
-            return []
-        
-        logging.info("🤖 [Query Gen] Intentando con HuggingFace...")
-        response = requests.post(
-            "https://router.huggingface.co/novita/v3/openai/chat/completions",
-            headers={
-                "Authorization": f"Bearer {hf_token}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "Qwen/Qwen2.5-72B-Instruct",
-                "messages": [
-                    {"role": "system", "content": system_msg},
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.3,
-                "max_tokens": 600
-            },
-            timeout=30
-        )
-        
-        if response.status_code == 200:
-            content = response.json()["choices"][0]["message"]["content"]
-            queries = _parse_llm_response(content)
-            if queries:
-                logging.info(f"   ✅ HuggingFace: {len(queries)} queries generadas")
-                return queries
-        else:
-            logging.warning(f"   ⚠️ HuggingFace respondió {response.status_code}")
-    except Exception as e:
-        logging.warning(f"   ⚠️ HuggingFace falló: {e}")
-    return []
+                
+    return None
 
 
 # ============================================================
@@ -572,12 +458,8 @@ Output ONLY this JSON format:
   "cross_terms": ["term that combines 2+ concepts", "compound term2"]
 }}"""
 
-    result = None
-    for try_func in [_try_github_models, _try_groq, _try_huggingface]:
-        raw = try_func(user_prompt, system_msg)
-        if raw:
-            result = raw
-            break
+    logging.info("🤖 [Synonyms] Solicitando sinónimos al LLM Router...")
+    result = _call_llm_json(user_prompt, system_msg, return_dict=True)
 
     # Procesar resultado del LLM
     if result and isinstance(result, dict) and "concepts" in result:
