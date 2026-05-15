@@ -270,20 +270,25 @@
   </header>
 
   <!-- Stats -->
-  <div class="stats-bar">
+  <div class="stats-bar" style="grid-template-columns: repeat(5, 1fr);">
     <div class="stat-card">
       <div class="label">Encontrados</div>
       <div class="value indigo" id="total-articles">{{ raw_total }}</div>
       <div class="sub">búsqueda bruta</div>
     </div>
     <div class="stat-card">
-      <div class="label">Tras Filtros</div>
-      <div class="value green" id="filtered-count">{{ total }}</div>
+      <div class="label">Descartados</div>
+      <div class="value orange" id="concept-discarded-count">{{ concept_discarded }}</div>
+      <div class="sub">filtro conceptual</div>
     </div>
     <div class="stat-card">
       <div class="label">Duplicados</div>
       <div class="value orange" id="duplicates-count">{{ duplicates_removed }}</div>
       <div class="sub">eliminados</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Tras Filtros</div>
+      <div class="value green" id="filtered-count">{{ total }}</div>
     </div>
     <div class="stat-card">
       <div class="label">Finales</div>

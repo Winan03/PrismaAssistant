@@ -321,14 +321,20 @@ async def initial_search(request: Request, background_tasks: BackgroundTasks, qu
                 synonym_data=synonym_data,
                 min_concepts_required=min_req,
             )
+            concept_discarded = cp_report['discarded_by_concepts']
+            unique_total = cp_report['total']
             logging.info(
                 f"🔬 [Concept Filter] Corpus pre-ChromaDB: "
                 f"{cp_report['total']} → {cp_report['passed']} artículos "
                 f"({cp_report['reduction_pct']}% reducción)"
             )
         else:
+            concept_discarded = 0
+            unique_total = len(articles)
             logging.info("ℹ️ [Concept Filter] Sin datos de sinónimos, omitiendo")
     except Exception as e:
+        concept_discarded = 0
+        unique_total = len(articles)
         logging.warning(f"⚠️ [Concept Filter] Error (no crítico): {e}")
     # ============================================================
     
@@ -374,7 +380,7 @@ async def initial_search(request: Request, background_tasks: BackgroundTasks, qu
         lang_counts[detected] += 1
     journals = Counter([str(a.get('journal', 'Unknown')) for a in articles])
     
-    duplicates_removed = raw_count - len(articles)
+    duplicates_removed = raw_count - unique_total
     languages_list = [
         {"code": code, "name": lang_meta.get(code, {}).get('name', code), 
          "flag": lang_meta.get(code, {}).get('flag', '🌐'), "count": count}
@@ -387,6 +393,7 @@ async def initial_search(request: Request, background_tasks: BackgroundTasks, qu
         "total": len(articles),
         "raw_total": raw_count,
         "duplicates_removed": duplicates_removed,
+        "concept_discarded": concept_discarded,
         "year_min": y_min,
         "year_max": y_max,
         "languages": languages_list,

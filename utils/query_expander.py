@@ -84,6 +84,8 @@ EXAMPLES of good dragnet queries (from various random domains):
 - Domain C: "quantum computing cryptography"
 
 RULES:
+- FOCUS ONLY ON THE 2 STRONGEST PILLARS of the research question (e.g. "target population" + "core technology").
+- IGNORE highly specific modifiers, edge constraints, or comparative elements (e.g. "ecological environments", "fixed timing", "traditional systems") which will be filtered locally later.
 - Each query MUST BE MAXIMUM 3 or 4 WORDS. Do not write long sentences.
 - Output ONLY valid JSON: {{"queries": ["query1", "query2", ...]}}
 - ALL queries MUST be in ENGLISH, even if the research question is in another language.
