@@ -350,24 +350,16 @@ async def initial_search(request: Request, background_tasks: BackgroundTasks, qu
             n_concepts = len(synonym_data["synonyms"])
             # El filtro conceptual es solo para eliminar basura (artículos fuera de dominio).
             # Los abstracts son cortos (150-250 palabras) y rara vez contienen todos los conceptos explícitamente.
-            # Lógica relajada:
-            # - Si hay 1 o 2 conceptos: se piden todos (1 o 2).
-            # - Si hay 3 o 4 conceptos: se piden al menos 2.
-            # - Si hay 5 o más conceptos: se piden al menos 3.
-            if n_concepts <= 2:
-                min_req = n_concepts
-            elif n_concepts <= 4:
-                min_req = 2
-            elif n_concepts <= 6:
-                min_req = 3
+            if n_concepts <= 3:
+                min_req = max(1, n_concepts - 1)
             else:
-                min_req = 4
+                min_req = 2
             articles, cp_report = concept_presence_filter(
                 articles,
                 synonym_data=synonym_data,
                 min_concepts_required=min_req,
             )
-            concept_discarded = cp_report['discarded_by_concepts']
+            concept_discarded = cp_report['excluded']
             unique_total = cp_report['total']
             logging.info(
                 f"🔬 [Concept Filter] Corpus pre-ChromaDB: "

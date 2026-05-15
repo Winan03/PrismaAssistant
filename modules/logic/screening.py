@@ -686,26 +686,38 @@ def ai_criteria_screening_full(
             '- Reviews, surveys, meta-analyses score 1-3 on score, but may still have include=true.\n\n'
             'Respond ONLY with valid JSON: {"include": true, "score": 8, "reason": "one-line justification"}'
         )
-        try:
-            resp = requests.post(
-                config.CEREBRAS_ENDPOINT,
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json={"model": config.CEREBRAS_MODEL,
-                      "messages": [{"role": "user", "content": prompt}],
-                      "max_tokens": 80, "temperature": 0.0},
-                timeout=15
-            )
-            content = resp.json()["choices"][0]["message"]["content"].strip()
-            # Regex: acepta cualquier orden de keys
-            m1 = re.search(r'"include"\s*:\s*(true|false)', content)
-            m2 = re.search(r'"score"\s*:\s*(\d+)', content)
-            if m1 and m2:
-                return m1.group(1) == "true", float(m2.group(1))
-            data = json.loads(content)
-            return bool(data.get("include", True)), float(data.get("score", 5))
-        except Exception as e:
-            logging.debug(f"[Criteria] Error '{title[:35]}': {e}")
+        results = []
+        for _ in range(3):
+            try:
+                resp = requests.post(
+                    config.CEREBRAS_ENDPOINT,
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json={"model": config.CEREBRAS_MODEL,
+                          "messages": [{"role": "user", "content": prompt}],
+                          "max_tokens": 80, "temperature": 0.2}, # Temperature 0.2 para ligera varianza
+                    timeout=15
+                )
+                content = resp.json()["choices"][0]["message"]["content"].strip()
+                # Regex: acepta cualquier orden de keys
+                m1 = re.search(r'"include"\s*:\s*(true|false)', content, re.IGNORECASE)
+                m2 = re.search(r'"score"\s*:\s*(\d+)', content)
+                if m1 and m2:
+                    results.append((m1.group(1).lower() == "true", float(m2.group(1))))
+                else:
+                    data = json.loads(content)
+                    results.append((bool(data.get("include", True)), float(data.get("score", 5))))
+            except Exception as e:
+                logging.debug(f"[Criteria] Error '{title[:35]}': {e}")
+                
+        if not results:
             return True, 5.0  # Error de red: incluir con score neutro
+            
+        # Mayoría de votos
+        trues = sum(1 for r in results if r[0])
+        final_inc = trues >= 2 if len(results) >= 2 else results[0][0]
+        final_score = sum(r[1] for r in results) / len(results)
+        
+        return final_inc, final_score
 
     # Evaluar todos concurrentemente
     eval_results: dict = {}

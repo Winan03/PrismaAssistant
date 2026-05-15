@@ -364,23 +364,23 @@
       if (!progressBox && mainBtn) {
           progressBox = document.createElement('div');
           progressBox.id = 'synthesis-progress-box';
-          progressBox.style = "margin-top: 1.5rem; background: #0f172a; border-radius: 8px; font-family: monospace; font-size: 0.85rem; color: #38bdf8; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); width: 100%; text-align: left;";
+          progressBox.style = "margin-top: 1.5rem; background: #f8fafc; border-radius: 8px; font-family: monospace; font-size: 0.85rem; color: #334155; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); width: 100%; text-align: left; border: 1px solid #cbd5e1;";
           
           const terminalHeader = document.createElement('div');
-          terminalHeader.style = "background: #1e293b; padding: 8px 12px; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 8px; color: #94a3b8;";
+          terminalHeader.style = "background: #e2e8f0; padding: 8px 12px; border-bottom: 1px solid #cbd5e1; display: flex; align-items: center; gap: 8px; color: #475569;";
           terminalHeader.innerHTML = '<i class="fas fa-terminal"></i><span>Backend Logs</span><span style="margin-left:auto; display:flex; gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#ef4444;"></span><span style="width:10px;height:10px;border-radius:50%;background:#eab308;"></span><span style="width:10px;height:10px;border-radius:50%;background:#22c55e;"></span></span>';
           
           const terminalBody = document.createElement('div');
           terminalBody.id = "progress-terminal";
           terminalBody.style = "padding: 12px; height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; line-height: 1.4;";
-          terminalBody.innerHTML = '<div><span style="color:#22c55e;">➜</span> <span style="color:#94a3b8;">~</span> Iniciando generación de síntesis...</div>';
+          terminalBody.innerHTML = '<div><span style="color:#0ea5e9;">➜</span> <span style="color:#64748b;">~</span> Iniciando generación de síntesis...</div>';
           
           progressBox.appendChild(terminalHeader);
           progressBox.appendChild(terminalBody);
           mainBtn.parentNode.insertBefore(progressBox, mainBtn.nextSibling);
       } else if (progressBox) {
           const terminalBody = progressBox.querySelector('#progress-terminal');
-          terminalBody.innerHTML = '<div><span style="color:#22c55e;">➜</span> <span style="color:#94a3b8;">~</span> Iniciando generación de síntesis...</div>';
+          terminalBody.innerHTML = '<div><span style="color:#0ea5e9;">➜</span> <span style="color:#64748b;">~</span> Iniciando generación de síntesis...</div>';
       }
 
       // SSE Connection
@@ -399,7 +399,7 @@
           if (progressBox) {
               const terminalBody = progressBox.querySelector('#progress-terminal');
               const line = document.createElement('div');
-              line.innerHTML = `<span style="color:#22c55e;">➜</span> <span style="color:#94a3b8;">~</span> ${event.data}`;
+              line.innerHTML = `<span style="color:#0ea5e9;">➜</span> <span style="color:#64748b;">~</span> ${event.data}`;
               terminalBody.appendChild(line);
               terminalBody.scrollTop = terminalBody.scrollHeight;
           }
