@@ -142,7 +142,12 @@ INTERNAL_EVALUATION_TOKEN = os.getenv("INTERNAL_EVALUATION_TOKEN", "")
 # ==========================================
 USE_OLLAMA_EMBEDDING = os.getenv("USE_OLLAMA_EMBEDDING", "True").lower() == "true"
 OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
-OLLAMA_EMBEDDING_BASE_URL = os.getenv("OLLAMA_EMBEDDING_BASE_URL", "http://localhost:11434")
+OLLAMA_EMBEDDING_BASE_URL_DEFAULT = (
+    "https://ollama.com"
+    if OLLAMA_API_KEY
+    else "http://localhost:11434"
+)
+OLLAMA_EMBEDDING_BASE_URL = os.getenv("OLLAMA_EMBEDDING_BASE_URL", OLLAMA_EMBEDDING_BASE_URL_DEFAULT)
 
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/allenai-specter")
 

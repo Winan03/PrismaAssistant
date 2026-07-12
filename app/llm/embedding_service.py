@@ -223,6 +223,10 @@ class OllamaEmbedder:
     def __init__(self, model_name: str, base_url: str) -> None:
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
+        self.headers = {"Content-Type": "application/json"}
+        api_key = getattr(config, "OLLAMA_API_KEY", None)
+        if api_key:
+            self.headers["Authorization"] = f"Bearer {api_key}"
         self.dim: int = 0
         self._pulled_verified = False
         self._ensure_pulled()
@@ -234,7 +238,7 @@ class OllamaEmbedder:
         if self._pulled_verified:
             return
         try:
-            resp = requests.get(f"{self.base_url}/api/tags", timeout=_OLLAMA_DETECT_TIMEOUT)
+            resp = requests.get(f"{self.base_url}/api/tags", headers=self.headers, timeout=_OLLAMA_DETECT_TIMEOUT)
             if resp.status_code == 200:
                 available = [m.get("name", "") for m in resp.json().get("models", [])]
                 base = self.model_name.split(":")[0]
@@ -249,6 +253,7 @@ class OllamaEmbedder:
             )
             pull = requests.post(
                 f"{self.base_url}/api/pull",
+                headers=self.headers,
                 json={"name": self.model_name, "stream": False},
                 timeout=_OLLAMA_PULL_TIMEOUT,
             )
@@ -278,7 +283,7 @@ class OllamaEmbedder:
         ]
         for url, payload, key in endpoints:
             try:
-                resp = requests.post(url, json=payload, timeout=_OLLAMA_DETECT_TIMEOUT)
+                resp = requests.post(url, headers=self.headers, json=payload, timeout=_OLLAMA_DETECT_TIMEOUT)
                 if resp.status_code == 200:
                     data = resp.json()
                     raw = data.get(key, [])
@@ -321,6 +326,7 @@ class OllamaEmbedder:
             try:
                 resp = requests.post(
                     url_batch,
+                    headers=self.headers,
                     json={"model": self.model_name, "input": batch},
                     timeout=_OLLAMA_EMBED_TIMEOUT,
                 )
@@ -338,6 +344,7 @@ class OllamaEmbedder:
                     try:
                         r = requests.post(
                             url_single,
+                            headers=self.headers,
                             json={"model": self.model_name, "prompt": text},
                             timeout=_OLLAMA_EMBED_TIMEOUT,
                         )
