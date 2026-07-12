@@ -12,14 +12,14 @@ services:
       - ANONYMIZED_TELEMETRY=False
       - CHROMA_TELEMETRY=False
     env_file:
-      - .env
+      - ../.env
     volumes:
       # Persiste la base de datos vectorial entre reinicios
-      - ./chroma_db:/app/chroma_db
+      - ../chroma_db:/app/chroma_db
       # Persiste logs
-      - ./logs:/app/logs
+      - ../logs:/app/logs
       # Persiste sesiones de usuario
-      - ./sessions:/app/.cache/sessions
+      - ../sessions:/app/.cache/sessions
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
