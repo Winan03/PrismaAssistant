@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Revisión Completada — PRISMA Assistant</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--primary:#0f766e;--primary-light:#14b8a6;--primary-bg:#f0fdfa;--bg:#f8fafb;--card:#fff;--text:#1e293b;--text-muted:#64748b;--border:#e2e8f0;--radius:14px;--green:#10b981;--green-bg:#ecfdf5;--blue:#3b82f6;--blue-bg:#eff6ff}
+    body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+
+    .navbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 2rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+    .navbar-brand{font-weight:800;font-size:1rem;color:var(--primary);display:flex;align-items:center;gap:8px;text-decoration:none}
+    .nav-steps{display:flex;gap:0;list-style:none}
+    .nav-step{display:flex;align-items:center;gap:6px;padding:8px 14px;font-size:0.75rem;font-weight:600;color:var(--text-muted)}
+    .nav-step.done{color:var(--primary)}
+    .nav-step .sn{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:800;background:var(--primary);color:#fff}
+    .nav-step+.nav-step::before{content:'';width:20px;height:2px;background:var(--primary-light);margin-right:6px}
+
+    .content{max-width:900px;margin:0 auto;padding:2rem 1.5rem 3rem;flex:1}
+
+    /* Header */
+    .result-header{text-align:center;padding:2.5rem 0 1.5rem}
+    .result-header .icon{width:60px;height:60px;background:var(--green-bg);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:1rem;border:2px solid #a7f3d0}
+    .result-header .icon i{font-size:1.5rem;color:var(--green)}
+    .result-header h1{font-size:1.8rem;font-weight:800;margin-bottom:0.3rem}
+    .result-header p{color:var(--text-muted);font-size:0.9rem}
+
+    /* Stats */
+    .stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:0.8rem;margin-bottom:2rem}
+    .stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center;border-top:3px solid var(--border)}
+    .stat:nth-child(1){border-top-color:#0ea5e9} .stat:nth-child(2){border-top-color:var(--primary)} .stat:nth-child(3){border-top-color:#7c3aed} .stat:nth-child(4){border-top-color:#f59e0b} .stat:nth-child(5){border-top-color:var(--green)}
+    .stat .n{font-size:1.6rem;font-weight:800;color:var(--text)}
+    .stat:nth-child(5) .n{color:var(--green)}
+    .stat .l{font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-top:2px}
+
+    /* Actions bar */
+    .actions-bar{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem 1.5rem;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+    .actions-bar-info{display:flex;align-items:center;gap:12px}
+    .actions-bar-info .ic{width:40px;height:40px;background:var(--blue-bg);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .actions-bar-info .ic i{color:var(--blue);font-size:1rem}
+    .actions-bar-info h3{font-size:0.9rem;font-weight:700}
+    .actions-bar-info p{font-size:0.72rem;color:var(--text-muted)}
+    .actions-btns{display:flex;gap:8px;flex-wrap:wrap}
+    .action-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border-radius:10px;font-size:0.78rem;font-weight:700;cursor:pointer;transition:all 0.15s;font-family:inherit;text-decoration:none;border:none}
+    .action-btn.primary{background:var(--primary);color:#fff}
+    .action-btn.primary:hover{background:#0d5f58;box-shadow:0 4px 12px rgba(15,118,110,0.3)}
+    .action-btn.outline{background:var(--card);border:1px solid var(--border);color:var(--text)}
+    .action-btn.outline:hover{border-color:var(--primary-light);background:var(--primary-bg);color:var(--primary)}
+
+    /* Synthesis */
+    .synthesis-card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);border-left:4px solid var(--blue);margin-bottom:1.5rem;overflow:hidden}
+    .synthesis-header{padding:1.2rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+    .synthesis-header h2{font-size:1rem;font-weight:700;display:flex;align-items:center;gap:8px}
+    .synthesis-header h2 i{color:var(--blue)}
+    .synthesis-header span{font-size:0.72rem;color:var(--text-muted)}
+    .synthesis-body{padding:1.5rem}
+    .prose{max-width:none;line-height:1.75;color:#374151;font-size:0.9rem}
+    .prose p{margin:0.8em 0} .prose strong{color:#1f2937;font-weight:600}
+    .synthesis-note{margin:1rem 1.5rem 1.5rem;padding:10px 14px;background:var(--blue-bg);border-radius:8px;font-size:0.75rem;color:#1e40af;display:flex;align-items:center;gap:8px}
+
+    /* Articles list */
+    .articles-card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);padding:1.5rem;margin-bottom:1.5rem}
+    .articles-card h2{font-size:1rem;font-weight:700;margin-bottom:1rem;display:flex;align-items:center;gap:8px}
+    .articles-card h2 i{color:var(--green)}
+    .article-item{border-left:3px solid var(--green);padding:10px 14px;margin-bottom:8px;border-radius:0 10px 10px 0;background:#fafbfc;transition:background 0.15s}
+    .article-item:hover{background:var(--green-bg)}
+    .article-item h3{font-size:0.85rem;font-weight:700;margin-bottom:4px;line-height:1.4}
+    .article-item h3 a{text-decoration:none;color:var(--text);transition:color 0.15s}
+    .article-item h3 a:hover{color:var(--primary)}
+    .article-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+    .article-source-btn{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;padding:4px 8px;border:1px solid #99f6e4;border-radius:8px;background:#f0fdfa;color:var(--primary);font-size:0.65rem;font-weight:700;text-decoration:none}
+    .article-source-btn:hover{background:#ccfbf1}
+    .authors-full{max-width:100%;line-height:1.35}
+    .article-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:0.7rem;color:var(--text-muted)}
+    .rel-badge{font-size:0.6rem;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--green-bg);color:#065f46;border:1px solid #a7f3d0}
+    .source-badge{font-size:0.6rem;padding:2px 8px;border-radius:6px;background:#f1f5f9;color:var(--text-muted)}
+
+    footer{background:var(--card);border-top:1px solid var(--border);padding:1.5rem 2rem;text-align:center;font-size:0.8rem;color:var(--text-muted)} footer strong{color:var(--primary)}
+    .footer-credits{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;margin-top:.6rem;font-size:.65rem}
+    .footer-credits a{color:var(--text-muted);text-decoration:none;transition:color .15s;font-weight:500} .footer-credits a:hover{color:var(--primary)}
+    .footer-credits .sep{color:#ddd} .footer-section-label{font-size:.55rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#cbd5e1;margin:0 4px}
+    @media(max-width:640px){.stats-row{grid-template-columns:repeat(3,1fr)}.actions-bar{flex-direction:column;align-items:stretch}.nav-steps{display:none}}
+  </style>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="/" class="navbar-brand"><i class="fas fa-flask"></i> PRISMA Assistant</a>
+    <ul class="nav-steps">
+      <li class="nav-step done"><span class="sn"><i class="fas fa-check" style="font-size:0.5rem"></i></span> Búsqueda</li>
+      <li class="nav-step done"><span class="sn"><i class="fas fa-check" style="font-size:0.5rem"></i></span> Filtros</li>
+      <li class="nav-step done"><span class="sn"><i class="fas fa-check" style="font-size:0.5rem"></i></span> Screening</li>
+      <li class="nav-step done"><span class="sn"><i class="fas fa-check" style="font-size:0.5rem"></i></span> Completado</li>
+    </ul>
+  </nav>
+
+  <div class="content">
+    <!-- Header -->
+    <div class="result-header">
+      <div class="icon"><i class="fas fa-check"></i></div>
+      <h1>Revisión Completada</h1>
+      <p>Análisis finalizado — {{ metrics.final_included }} artículos incluidos en la síntesis</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat"><div class="n">{{ metrics.total }}</div><div class="l">Identificados</div></div>
+      <div class="stat"><div class="n">{{ metrics.after_filter }}</div><div class="l">Filtrados</div></div>
+      <div class="stat"><div class="n">{{ metrics.after_dedup }}</div><div class="l">Únicos</div></div>
+      <div class="stat"><div class="n">{{ metrics.relevant }}</div><div class="l">Relevantes</div></div>
+      <div class="stat"><div class="n">{{ metrics.final_included }}</div><div class="l">Incluidos</div></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions-bar">
+      <div class="actions-bar-info">
+        <div class="ic"><i class="fas fa-file-pdf"></i></div>
+        <div>
+          <h3>Reporte Disponible</h3>
+          <p>Incluye diagrama PRISMA, síntesis detallada y referencias APA 7</p>
+        </div>
+      </div>
+      <div class="actions-btns">
+        {% if pdf_available %}
+        <a href="/download_pdf/{{ pdf_filename }}" class="action-btn primary"><i class="fas fa-download"></i> Descargar PDF</a>
+        {% endif %}
+        <button onclick="copySynthesis()" class="action-btn outline"><i class="fas fa-copy"></i> Copiar Resumen</button>
+        <a href="/" class="action-btn outline"><i class="fas fa-redo"></i> Nueva Revisión</a>
+      </div>
+    </div>
+
+    <!-- Synthesis -->
+    <div class="synthesis-card">
+      <div class="synthesis-header">
+        <h2><i class="fas fa-lightbulb"></i> Resumen Ejecutivo AI</h2>
+        <span>Basado en {{ final_articles|length }} estudios</span>
+      </div>
+      <div class="synthesis-body">
+        <div class="prose" id="synthesis-content">
+          {{ synthesis | safe }}
+        </div>
+      </div>
+      <div class="synthesis-note">
+        <i class="fas fa-info-circle"></i>
+        <span><strong>Nota:</strong> Este es un resumen ejecutivo. El PDF contiene la síntesis narrativa completa con todas las referencias en formato APA 7.</span>
+      </div>
+    </div>
+
+    <!-- Articles -->
+    <div class="articles-card">
+      <h2><i class="fas fa-list"></i> Artículos Incluidos ({{ final_articles|length }})</h2>
+      {% for article in final_articles %}
+      {% set source_url = article.source_url or article.url or article.pdf_url or article.link %}
+      {% if not source_url and article.doi %}{% set source_url = 'https://doi.org/' ~ article.doi %}{% endif %}
+      <div class="article-item">
+        <div class="article-title-row">
+          <h3>
+            {% if source_url %}
+            <a href="{{ source_url }}" target="_blank" rel="noopener">
+              {{ loop.index }}. {{ article.title }}
+            </a>
+            {% else %}
+              {{ loop.index }}. {{ article.title }}
+            {% endif %}
+          </h3>
+          {% if source_url %}
+          <a class="article-source-btn" href="{{ source_url }}" target="_blank" rel="noopener">
+            <i class="fas fa-external-link-alt"></i> Fuente
+          </a>
+          {% endif %}
+        </div>
+        <div class="article-meta">
+          <span class="authors-full"><i class="fas fa-users" style="margin-right:2px"></i>{{ article.authors_display or (article.authors or [])|join('; ') }}</span>
+          <span>•</span>
+          <span><i class="fas fa-calendar" style="margin-right:2px"></i>{{ article.year }}</span>
+          {% if article.journal %}<span>•</span><span style="font-style:italic">{{ article.journal }}</span>{% endif %}
+          {% set percent = (article.similarity * 100)|int %}
+          <span class="rel-badge">{{ percent }}%</span>
+          {% if article.evidence_bucket == 'BACKGROUND_ONLY' %}
+          <span class="source-badge" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa"><i class="fas fa-circle-info"></i> Revisar a profundidad</span>
+          {% endif %}
+          {% if article.source %}<span class="source-badge">{{ article.source }}</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <footer>
+    <div>© 2025 <strong>Universidad Privada Antenor Orrego</strong></div>
+    <div class="footer-credits">
+      <span class="footer-section-label">Datos</span>
+      <a href="https://www.semanticscholar.org/" target="_blank">Semantic Scholar</a><span class="sep">·</span>
+      <a href="https://openalex.org/" target="_blank">OpenAlex</a><span class="sep">·</span>
+      <a href="https://europepmc.org/" target="_blank">Europe PMC</a><span class="sep">·</span>
+      <a href="https://unpaywall.org/" target="_blank">Unpaywall</a><span class="sep">|</span>
+      <span class="footer-section-label">IA</span>
+      <a href="https://ai.google.dev/" target="_blank">Google Gemini</a><span class="sep">·</span>
+      <a href="https://openrouter.ai/" target="_blank">OpenRouter</a><span class="sep">·</span>
+      <a href="https://groq.com/" target="_blank">Groq</a><span class="sep">·</span>
+      <a href="https://cerebras.ai/" target="_blank">Cerebras</a><span class="sep">|</span>
+      <span class="footer-section-label">Infra</span>
+      <a href="https://www.trychroma.com/" target="_blank">ChromaDB</a><span class="sep">·</span>
+      <a href="https://fastapi.tiangolo.com/" target="_blank">FastAPI</a>
+    </div>
+  </footer>
+
+  <script>
+    function copySynthesis() {
+      const text = document.getElementById('synthesis-content').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        const n = document.createElement('div');
+        n.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--primary);color:#fff;padding:12px 20px;border-radius:10px;font-size:0.85rem;font-weight:600;z-index:100;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,0.15)';
+        n.innerHTML = '<i class="fas fa-check"></i> Resumen copiado al portapapeles';
+        document.body.appendChild(n);
+        setTimeout(() => n.remove(), 3000);
+      });
+    }
+  </script>
+</body>
+</html>

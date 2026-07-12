@@ -1,0 +1,38 @@
+{
+    "domain_name": "Ingeniería",
+    "gender_rules": [
+        {
+            "pattern": "\\blas\\s+falsos\\s+positivos\\b",
+            "replacement": "los falsos positivos"
+        },
+        {
+            "pattern": "\\b[Ll]as\\s+falsos\\s+positivos\\b",
+            "replacement": "los falsos positivos"
+        }
+    ],
+    "technical_definitions": {
+        "falsos positivos": "la optimización de los algoritmos de detección para minimizar el ruido informativo y las alertas erróneas",
+        "SAST": "análisis estático de seguridad que inspecciona el código fuente sin ejecución",
+        "LLM": "modelo de lenguaje de gran escala capaz de comprender contextos complejos y generar respuestas coherentes",
+        "datasets": "conjuntos de datos etiquetados y curados que sirven de base para el entrenamiento y validación de modelos"
+    },
+    "term_mappings": {
+        "falos": "fallos",
+        "estatico": "estático",
+        "Dichos positivos": "falsos positivos",
+        "Dicha revision sistematica": "este estudio",
+        "Dicha revisión sistemática": "este estudio",
+        "pipelines de desarrollo continuo": "pipelines de CI/CD",
+        "integración y desarrollo continuo": "pipelines de CI/CD",
+        "en dicho artefacto": "en el código fuente",
+        "el artefacto": "el código fuente",
+        "F1 score": "F1-score"
+    },
+    "forbidden_phrases": {
+        "En los últimos años": "Recientemente",
+        "últimos años": "recientemente",
+        "nos permite": "se permite",
+        "nuestro estudio": "el presente estudio",
+        "actual o actualidad": "en la literatura contemporánea"
+    }
+}

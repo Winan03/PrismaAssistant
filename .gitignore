@@ -4,6 +4,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+!config/.env.example
 chroma_db/
 logs/
 .cache/
@@ -13,8 +14,6 @@ logs/
 models/
 llama.cpp/
 pdf_text_cache/
-debug/
-tmp/
 static/*.pdf
 static/*.png
 sessions/
@@ -40,6 +39,8 @@ offload_cache/
 *.onnx
 *.gguf
 spiece.model
+notebooks/rsl_extractor_model/
+notebooks/*.ipynb
 training/rsl_extractor_model/
 training/*.ipynb
 
@@ -48,6 +49,22 @@ Thumbs.db
 .DS_Store
 
 # Archivos de Evaluación y Despliegue Privados
-Implementacion_VPS/
 evaluation/
 guia_despliegue_vps.md.resolved
+
+# Datos de sesión del servidor (volumen Docker)
+data/sessions/
+data/logs/
+acquisition_state.json
+*.pkl
+# Deploy y plan de implementaci�n (contiene credenciales)
+scripts/deploy/
+scripts/analysis/
+
+# Notebooks de entrenamiento (datasets y archivos grandes)
+notebooks/
+
+arquitectura_rag_es.png
+
+# Evaluacion de tesis (datos y scripts privados)
+scripts/analysis/

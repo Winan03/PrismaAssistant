@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Criterios de Filtrado — PRISMA Assistant</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #0f766e;
+      --primary-light: #14b8a6;
+      --primary-bg: #f0fdfa;
+      --accent: #1e40af;
+      --bg: #f8fafb;
+      --card: #ffffff;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+      --shadow-lg: 0 4px 20px rgba(0,0,0,0.08);
+      --radius: 16px;
+      --orange: #ea580c;
+      --orange-bg: #fff7ed;
+    }
+    body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── Navbar ── */
+    .navbar {
+      background: var(--card); border-bottom: 1px solid var(--border);
+      padding: 0 2rem; height: 64px; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .navbar-brand { font-weight: 800; font-size: 1.1rem; color: var(--primary); display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-steps { display: flex; gap: 0; list-style: none; }
+    .nav-step {
+      display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+      font-size: 0.8rem; font-weight: 600; color: var(--text-muted); position: relative;
+    }
+    .nav-step.active { color: var(--primary); }
+    .nav-step .step-num {
+      width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: 800; background: #f1f5f9; color: var(--text-muted);
+    }
+    .nav-step.done .step-num { background: var(--primary); color: #fff; }
+    .nav-step.active .step-num { background: var(--primary); color: #fff; }
+    .nav-step + .nav-step::before {
+      content: ''; width: 24px; height: 2px; background: var(--border); margin-right: 8px;
+    }
+
+    /* ── Page Header ── */
+    .page-header { text-align: center; padding: 3rem 1.5rem 1.5rem; }
+    .page-header h1 { font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; }
+    .page-header p { color: var(--text-muted); max-width: 550px; margin: 0 auto; font-size: 0.9rem; }
+
+    /* ── Stats Bar (Horizontal) ── */
+    .stats-bar {
+      max-width: 1000px; margin: 0 auto 2rem; padding: 0 1.5rem;
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
+    }
+    .stat-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+      padding: 1.25rem 1rem; text-align: center; box-shadow: var(--shadow);
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .stat-card:hover { transform: translateY(-2px); border-color: var(--primary-light); }
+    .stat-card .label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); font-weight: 700; margin-bottom: 6px; }
+    .stat-card .value { font-size: 1.6rem; font-weight: 800; line-height: 1; }
+    .stat-card .value.indigo { color: var(--accent); }
+    .stat-card .value.green { color: var(--primary); }
+    .stat-card .value.orange { color: var(--orange); }
+    .stat-card .value.purple { color: #7c3aed; }
+    .stat-card .sub { font-size: 0.65rem; color: var(--text-muted); margin-top: 6px; font-weight: 500; }
+    .stats-note {
+      max-width: 952px; margin: -1.25rem auto 2rem; padding: 0.75rem 1rem;
+      border: 1px solid var(--border); border-radius: 12px; background: #fff;
+      color: var(--text-muted); font-size: 0.78rem; line-height: 1.45;
+      box-shadow: var(--shadow);
+    }
+    .stats-note strong { color: var(--text); }
+
+    /* ── Main Content ── */
+    .content { max-width: 800px; margin: 0 auto; padding: 0 1.5rem 3rem; }
+
+    /* ── Filter Cards ── */
+    .filters-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+        width: 100%;
+    }
+
+    .filter-card {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 1.5rem;
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 140px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+    .filter-card.full { grid-column: 1 / -1; }
+    .filter-card h3 {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.9rem; font-weight: 700; margin-bottom: 1rem;
+    }
+    .filter-card h3 i { color: var(--primary); font-size: 0.85rem; }
+    .filter-card .hint { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem; }
+
+    /* ── Year Inputs ── */
+    .year-row { display: flex; gap: 12px; align-items: center; }
+    .year-input {
+      flex: 1; border: 2px solid var(--border); border-radius: 10px; padding: 10px 14px;
+      font-family: inherit; font-size: 0.9rem; font-weight: 600; text-align: center;
+      outline: none; transition: border-color 0.2s;
+    }
+    .year-input:focus { border-color: var(--primary-light); }
+    .year-input.year-error { border-color: #ef4444; background: #fef2f2; }
+    .year-sep { color: var(--text-muted); font-weight: 600; }
+    .year-error-msg { display: none; font-size: 0.7rem; color: #ef4444; margin-top: 6px; font-weight: 600; }
+
+    /* ── Criteria Section ── */
+    .criteria-toggle {
+      display: flex; align-items: center; justify-content: space-between; cursor: pointer;
+      padding: 10px 0; user-select: none;
+    }
+    .criteria-toggle:hover .criteria-toggle-label { color: var(--primary); }
+    .criteria-toggle-label { font-size: 0.85rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .criteria-toggle-label i { color: var(--primary); }
+    .criteria-toggle-badge { font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 8px; background: #f0fdf4; color: var(--primary); border: 1px solid #a7f3d0; }
+    .criteria-toggle-chevron { color: var(--text-muted); transition: transform 0.25s; font-size: 0.75rem; }
+    .criteria-body { overflow: hidden; max-height: 0; transition: max-height 0.4s ease, opacity 0.3s ease; opacity: 0; }
+    .criteria-body.open { max-height: 900px; opacity: 1; }
+    .criteria-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding-top: 14px; }
+    .criteria-col h4 { font-size: 0.78rem; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .criteria-col h4.inc { color: #059669; }
+    .criteria-col h4.exc { color: #dc2626; }
+    .criteria-hint { font-size: 0.68rem; color: var(--text-muted); margin-top: 8px; line-height: 1.4; }
+    /* Tag-chip box */
+    .tag-input-box {
+      border: 2px solid var(--border); border-radius: 12px; padding: 8px 10px;
+      background: #fafbfc; min-height: 80px; display: flex; flex-direction: column; gap: 8px;
+      transition: border-color 0.2s;
+    }
+    .tag-input-box:focus-within { border-color: var(--primary-light); background: #fff; }
+    .tag-input-box.inc-box:focus-within { border-color: #059669; }
+    .tag-input-box.exc-box:focus-within { border-color: #dc2626; }
+    .tags-container { display: flex; flex-wrap: wrap; gap: 6px; min-height: 10px; }
+    .tag-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px 4px 12px; border-radius: 20px;
+      font-size: 0.72rem; font-weight: 600; line-height: 1.3;
+      animation: chipIn 0.18s ease;
+    }
+    @keyframes chipIn { from { opacity:0; transform:scale(0.85); } to { opacity:1; transform:scale(1); } }
+    .tag-chip.inc { background: #ecfdf5; color: #065f46; border: 1.5px solid #6ee7b7; }
+    .tag-chip.exc { background: #fef2f2; color: #991b1b; border: 1.5px solid #fca5a5; }
+    .tag-chip-remove {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px; border-radius: 50%; cursor: pointer;
+      font-size: 0.65rem; font-weight: 700; border: none; padding: 0;
+      flex-shrink: 0; transition: background 0.15s;
+    }
+    .tag-chip.inc .tag-chip-remove { background: #a7f3d0; color: #065f46; }
+    .tag-chip.inc .tag-chip-remove:hover { background: #6ee7b7; }
+    .tag-chip.exc .tag-chip-remove { background: #fecaca; color: #991b1b; }
+    .tag-chip.exc .tag-chip-remove:hover { background: #fca5a5; }
+    .tag-input-row { display: flex; gap: 6px; align-items: center; }
+    .tag-text-input {
+      flex: 1; border: none; background: transparent; outline: none;
+      font-family: inherit; font-size: 0.78rem; color: var(--text);
+      padding: 4px 0;
+    }
+    .tag-text-input::placeholder { color: #94a3b8; }
+    .tag-add-btn {
+      width: 26px; height: 26px; border-radius: 8px; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 700; flex-shrink: 0; transition: background 0.15s;
+    }
+    .inc-box .tag-add-btn { background: #d1fae5; color: #059669; }
+    .inc-box .tag-add-btn:hover { background: #a7f3d0; }
+    .exc-box .tag-add-btn { background: #fee2e2; color: #dc2626; }
+    .exc-box .tag-add-btn:hover { background: #fecaca; }
+    .tag-empty-msg { font-size: 0.7rem; color: #94a3b8; padding: 4px 2px; font-style: italic; }
+
+    /* ── Toggle Switch ── */
+    .toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .toggle-label { font-size: 0.85rem; color: var(--text); font-weight: 500; }
+    .toggle-sub { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+    .toggle-switch {
+      position: relative; width: 48px; height: 26px; cursor: pointer;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-track {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: #cbd5e1; border-radius: 13px; transition: background 0.3s;
+    }
+    .toggle-thumb {
+      position: absolute; top: 3px; left: 3px; width: 20px; height: 20px;
+      background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      transition: transform 0.3s;
+    }
+    .toggle-switch input:checked + .toggle-track { background: var(--primary); }
+    .toggle-switch input:checked + .toggle-track .toggle-thumb { transform: translateX(22px); }
+
+    /* ── Language / Journal Chips ── */
+    .chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border: 2px solid var(--border); border-radius: 10px;
+      font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+      background: var(--card); color: var(--text);
+      user-select: none;
+    }
+    .chip:hover { border-color: var(--primary-light); background: var(--primary-bg); }
+    .chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .chip input { display: none; }
+    .chip .count { 
+      background: #f1f5f9; color: var(--text-muted); font-size: 0.7rem;
+      padding: 1px 7px; border-radius: 8px; font-weight: 700;
+    }
+    .chip.active .count { background: rgba(255,255,255,0.25); color: #fff; }
+
+    /* ── Journals list (scrollable) ── */
+    .journal-list {
+      max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+      padding-right: 8px;
+    }
+    .journal-list::-webkit-scrollbar { width: 4px; }
+    .journal-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .journal-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; border-radius: 10px; background: #f8fafc; cursor: pointer;
+      transition: background 0.15s; font-size: 0.8rem;
+    }
+    .journal-item:hover { background: var(--primary-bg); }
+    .journal-item .name { font-weight: 500; flex: 1; margin-right: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .journal-item .jcount { font-size: 0.7rem; color: var(--text-muted); background: #e2e8f0; padding: 2px 8px; border-radius: 8px; font-weight: 700; margin-right: 8px; }
+    .journal-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--primary); cursor: pointer; }
+
+    /* ── Info Box ── */
+    .info-box {
+      background: #f0fdf4; border-left: 4px solid var(--primary); border-radius: 0 12px 12px 0;
+      padding: 1rem 1.5rem; margin-bottom: 1rem;
+      display: flex; align-items: flex-start; gap: 12px;
+    }
+    .info-box i { color: var(--primary); margin-top: 2px; }
+    .info-box p { font-size: 0.8rem; color: var(--text); line-height: 1.5; }
+    .info-box strong { font-weight: 700; }
+
+    /* ── Submit Button ── */
+    .btn-submit {
+      width: 100%; padding: 16px; border: none; border-radius: 14px;
+      background: var(--primary); color: #fff; font-family: inherit;
+      font-size: 1rem; font-weight: 700; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    }
+    .btn-submit:hover { background: #0d5f58; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(15,118,110,0.3); }
+    .btn-submit:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+    .btn-count-text { font-size: 0.85rem; font-weight: 400; opacity: 0.9; }
+
+    /* ── PRISMA Flowchart ── */
+    .prisma-flow {
+      display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 2.5rem;
+    }
+    .flow-step {
+      display: flex; align-items: center; gap: 20px; width: 100%; max-width: 600px;
+    }
+    .flow-box {
+      flex: 1; background: #fff; border: 2px solid var(--border); border-radius: 12px;
+      padding: 12px 16px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+      transition: all 0.2s;
+    }
+    .flow-box:hover { border-color: var(--primary-light); transform: translateY(-1px); }
+    .flow-box .title { font-size: 0.65rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+    .flow-box .count { font-size: 1.4rem; font-weight: 800; color: var(--text); }
+    .flow-arrow { color: #cbd5e1; font-size: 1.2rem; }
+    .flow-side-box strong { font-size: 0.9rem; }
+
+    /* ── Audit Bar ── */
+    .audit-bar {
+      max-width: 800px; margin: 0 auto 1.5rem;
+      background: #fff; border: 1px solid var(--border); border-radius: 12px;
+      padding: 12px 20px; display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+    .audit-info { display: flex; align-items: center; gap: 12px; }
+    .audit-info i { color: var(--primary); font-size: 1.1rem; }
+    .audit-info span { font-size: 0.8rem; font-weight: 600; color: var(--text); }
+    .audit-btns { display: flex; gap: 8px; }
+
+    /* ── Modal Auditoria ── */
+    .modal { display:none; position:fixed; z-index:100; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); }
+    .modal-content { background:#fff; margin:5% auto; border-radius:16px; width:90%; max-width:1000px; height: 80vh; display:flex; flex-direction:column; overflow:hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+    .modal-header { padding: 16px 24px; border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+    .modal-body { flex: 1; overflow-y: auto; padding: 24px; }
+    .audit-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .audit-table th { text-align: left; background: #f8fafc; padding: 12px; border-bottom: 2px solid var(--border); color: var(--text-muted); text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.5px; }
+    .audit-table td { padding: 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .audit-table tr:hover { background: #f1f5f9; }
+    .reason-badge { font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .concept-tag { font-size: 0.6rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-right: 4px; margin-bottom: 4px; display: inline-flex; align-items: center; gap: 4px; }
+    .concept-tag.yes { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .concept-tag.no { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; opacity: 0.8; }
+    .concept-tag.no i { color: #dc2626; }
+    #prisma-diagram-container .mermaid {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+    #prisma-diagram-container svg {
+      max-width: 100% !important;
+      height: auto !important;
+    }
+    .prisma2020 {
+      width: min(980px, 100%);
+      color: #0f172a;
+      font-family: 'Inter', -apple-system, sans-serif;
+    }
+    .prisma2020 header {
+      margin: 0 0 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #e2e8f0;
+      text-align: left;
+    }
+    .prisma2020 h3 { font-size: 1rem; font-weight: 800; margin: 0 0 3px; }
+    .prisma2020 p { font-size: 0.72rem; color: #64748b; margin: 0; }
+    .prisma-grid {
+      display: grid;
+      grid-template-columns: 118px minmax(300px, 1fr) minmax(260px, 0.92fr);
+      gap: 12px 18px;
+      align-items: center;
+    }
+    .stage-label {
+      align-self: stretch;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      color: #fff;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+    }
+    .stage-label.identification { background: #0f766e; grid-row: span 1; }
+    .stage-label.screening { background: #2563eb; }
+    .stage-label.eligibility { background: #7c3aed; }
+    .stage-label.included { background: #15803d; }
+    .prisma2020 .box {
+      border: 1.5px solid #94a3b8;
+      border-radius: 6px;
+      background: #fff;
+      padding: 12px 14px;
+      min-height: 86px;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .prisma2020 .box.primary { border-color: #0f766e; background: #f0fdfa; }
+    .prisma2020 .box.excluded { border-style: dashed; border-color: #e11d48; background: #fff1f2; }
+    .prisma2020 .box.included-box { border-color: #15803d; border-width: 2px; background: #f0fdf4; }
+    .box-title { font-size: 0.78rem; font-weight: 700; line-height: 1.25; }
+    .box-count { font-size: 1rem; font-weight: 800; margin-top: 4px; }
+    .source-list { margin-top: 8px; display: grid; gap: 4px; }
+    .source-list div, .prisma2020 li {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 0.7rem;
+      line-height: 1.25;
+    }
+    .prisma2020 ul { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 4px; }
+    .prisma2020 strong { font-weight: 800; }
+    .box-total { margin-top: 8px; padding-top: 6px; border-top: 1px solid #fecdd3; font-size: 0.74rem; font-weight: 800; text-align: right; }
+    .arrow.down {
+      grid-column: 2;
+      height: 18px;
+      position: relative;
+      justify-self: center;
+      width: 2px;
+      background: #64748b;
+    }
+    .arrow.down::after {
+      content: '';
+      position: absolute;
+      left: -5px;
+      bottom: -1px;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 8px solid #64748b;
+    }
+    @media (max-width: 820px) {
+      .prisma-grid { grid-template-columns: 1fr; }
+      .stage-label { writing-mode: horizontal-tb; transform: none; min-height: 28px; }
+      .arrow.down { grid-column: 1; }
+    }
+
+    .btn-audit-view { 
+      background: #fff; border: 1.5px solid var(--primary); color: var(--primary); 
+      padding: 6px 14px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; 
+      cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+    }
+    .btn-audit-view:hover { background: var(--primary-bg); }
+    .btn-audit-download { 
+      background: var(--primary); color: #fff; border: none;
+      padding: 6px 14px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; 
+      cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+    }
+    .btn-audit-download:hover { background: #0d5f58; }
+
+    @media (max-width: 640px) {
+      .filter-grid { grid-template-columns: 1fr; }
+      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+      .nav-steps { display: none; }
+      .flow-step { flex-direction: column; }
+      .flow-side-box { width: 100%; border-left: none; border-top: 3px solid #ef4444; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar con pasos -->
+  <nav class="navbar">
+    <a href="/" class="navbar-brand"><i class="fas fa-flask"></i> PRISMA Assistant</a>
+    <ul class="nav-steps">
+      <li class="nav-step done"><span class="step-num">1</span> Búsqueda</li>
+      <li class="nav-step active"><span class="step-num">2</span> Filtros</li>
+      <li class="nav-step"><span class="step-num">3</span> Screening</li>
+      <li class="nav-step"><span class="step-num">4</span> Resultados</li>
+    </ul>
+  </nav>
+
+  <!-- Header -->
+  <header class="page-header">
+    <h1>Criterios de Inclusión y Exclusión</h1>
+    <p>Defina los parámetros de su Revisión Sistemática. Los filtros se aplicarán automáticamente.</p>
+  </header>
+
+  <!-- Stats Bar -->
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="label">Encontrados</div>
+      <div class="value indigo" id="raw-total">{{ raw_total }}</div>
+      <div class="sub">Entrada inicial</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Duplicados</div>
+      <div class="value orange" id="duplicates-count">{{ duplicates_removed }}</div>
+      <div class="sub">Eliminados</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Filtro conceptual</div>
+      <div class="value orange" id="concept-discarded-count">{{ concept_discarded }}</div>
+      <div class="sub">Excluidos</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Candidatos</div>
+      <div class="value green" id="filtered-count">{{ total }}</div>
+      <div class="sub">Tras Filtros</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Finales</div>
+      <div class="value purple" id="final-count">{{ total }}</div>
+      <div class="sub">Listos p/ Screening</div>
+    </div>
+  </div>
+
+  <div class="stats-note" id="stats-note" {% if concept_pool_total <= raw_total and adaptive_graph_recovered_count <= 0 %}style="display:none"{% endif %}>
+    Pool conceptual analizado: <strong id="concept-pool-total">{{ concept_pool_total }}</strong> registros.
+    <span id="graph-recovery-note">
+      {% if adaptive_graph_recovered_count > 0 %}
+        La recuperacion adaptativa agrego {{ adaptive_graph_recovered_count }} vecinos de Semantic Scholar; por eso el pool puede ser mayor que la entrada inicial.
+      {% endif %}
+    </span>
+  </div>
+
+  <!-- Audit Bar -->
+  <div class="audit-bar">
+    <div class="audit-info">
+      <i class="fas fa-shield-check"></i>
+      <span>Auditoría de Transparencia PRISMA</span>
+    </div>
+    <div class="audit-btns">
+      <button type="button" onclick="openPrismaModal()" class="btn-audit-view" title="Ver Diagrama de Flujo">
+        <i class="fas fa-project-diagram"></i> Diagrama
+      </button>
+      <button type="button" onclick="openAuditModal()" class="btn-audit-view">
+        <i class="fas fa-eye"></i> Auditoría Visual
+      </button>
+      <a href="/download_audit_zip/{{ session_id }}" class="btn-audit-download" style="text-decoration: none; background: #0284c7;">
+        <i class="fas fa-file-archive"></i> Descargar Auditoría (ZIP)
+      </a>
+      <a href="/download_audit_pdf/{{ session_id }}" class="btn-audit-download" style="text-decoration: none; background: #e11d48;">
+        <i class="fas fa-file-pdf"></i> Reporte PDF
+      </a>
+    </div>
+  </div>
+
+  <!-- Filters Form -->
+  <div class="content">
+    <form action="/apply_filters" method="post" id="filter-form">
+      <input type="hidden" name="session_id" value="{{ session_id }}">
+      <input type="hidden" name="question" value="{{ question }}">
+
+      <!-- Row 1: Años + Open Access -->
+      <div class="filter-grid">
+        <!-- Rango de Años -->
+        <div class="filter-card">
+          <h3><i class="fas fa-calendar-days"></i> Rango de Años</h3>
+          <p class="hint">Limite la antigüedad de las publicaciones.</p>
+          <div class="year-row">
+            <input type="number" name="start_year" id="start_year" value="{{ year_min }}" min="{{ year_min }}" max="{{ year_max }}" class="year-input" maxlength="4" oninput="enforceYearLength(this)">
+            <span class="year-sep">—</span>
+            <input type="number" name="end_year" id="end_year" value="{{ year_max }}" min="{{ year_min }}" max="{{ year_max }}" class="year-input" maxlength="4" oninput="enforceYearLength(this)">
+          </div>
+          <div class="year-error-msg" id="year-error-msg"><i class="fas fa-triangle-exclamation"></i> El año debe tener exactamente 4 dígitos</div>
+        </div>
+
+        <!-- Open Access (ON por defecto) -->
+        <div class="filter-card">
+          <h3><i class="fas fa-lock-open"></i> Open Access</h3>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Priorizar artículos de acceso abierto</div>
+              <div class="toggle-sub">Artículos con PDF disponible gratuitamente</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" name="open_access" value="true" id="open-access-checkbox" checked>
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Calidad Académica (NUEVO) -->
+        <div class="filter-card">
+          <h3><i class="fas fa-award"></i> Calidad Académica</h3>
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Solo artículos con revista</div>
+              <div class="toggle-sub">Excluir pre-prints y fuentes no asignadas</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" name="academic_quality" value="true" id="academic-quality-checkbox">
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 2: Idiomas + Revistas -->
+      <div class="filter-grid">
+        <!-- Idiomas -->
+        <div class="filter-card">
+          <h3><i class="fas fa-globe"></i> Idiomas</h3>
+          <div id="language-audit-note" style="font-size:0.7rem;color:var(--text-muted);margin-top:-6px;margin-bottom:8px">
+            Conteo por metadata de APIs; si falta, se infiere desde título/resumen.
+          </div>
+          <div class="chip-list" id="language-list-container">
+            {% for lang in languages %}
+              {% if lang.count > 0 %}
+              <label class="chip" data-filter="language" title="{{ lang.note or '' }}">
+                <input type="checkbox" name="languages" value="{{ lang.code }}" class="language-checkbox">
+                <span>{{ lang.flag }}</span>
+                {{ lang.name }}
+                <span class="count">{{ lang.count }}</span>
+              </label>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Revistas -->
+        <div class="filter-card">
+          <h3><i class="fas fa-book-open"></i> Filtrar por revista (opcional) <span style="font-weight:400;color:var(--text-muted);font-size:0.75rem;margin-left:4px" id="journals-total-label">({{ all_journals | length }})</span></h3>
+          <div style="font-size:0.7rem;color:var(--text-muted);margin-top:-6px;margin-bottom:8px">
+            Selecciona una o más revistas para reducir el conjunto de artículos. Si no seleccionas ninguna, no se aplica filtro.
+          </div>
+          <div class="journal-list" id="journal-list-container">
+            {% for journal in all_journals %}
+            <label class="journal-item" data-journal-name="{{ journal.name }}">
+              <span class="name" title="{{ journal.name }}">{{ journal.name }}</span>
+              <span class="jcount">{{ journal.count }}</span>
+              <input type="checkbox" name="journals" value="{{ journal.name }}" class="journal-checkbox">
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- CONSOLA DE LOGS (SSE) -->
+      <div id="console-container" style="margin-top: 45px; margin-bottom: 20px; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,0.06); display: none;">
+          <div style="background: #f8fafc; padding: 10px 18px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                  <span style="font-size: 0.75rem; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.5px;">Backend Logs</span>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                  <div style="width: 10px; height: 10px; border-radius: 50%; background: #fbbf24;"></div>
+                  <div style="width: 10px; height: 10px; border-radius: 50%; background: #10b981;"></div>
+              </div>
+          </div>
+          <div id="logs" style="background: #ffffff; color: #334155; padding: 1.25rem; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.85rem; height: 320px; overflow-y: auto; line-height: 1.6;">
+              <div style="color: #94a3b8; font-style: italic;">➜ Esperando inicio de proceso...</div>
+          </div>
+      </div>
+
+      <!-- Criterios de Inclusión / Exclusión (Opcional) -->
+      <div class="filter-card full">
+        <div class="criteria-toggle" id="criteria-toggle" onclick="toggleCriteria()">
+          <div class="criteria-toggle-label">
+            <i class="fas fa-filter-list"></i>
+            Criterios de Inclusión / Exclusión
+            <span class="criteria-toggle-badge">OPCIONAL</span>
+          </div>
+          <i class="fas fa-chevron-down criteria-toggle-chevron" id="criteria-chevron"></i>
+        </div>
+        <div class="criteria-body" id="criteria-body">
+          <p style="font-size:0.75rem;color:var(--text-muted);line-height:1.5;margin-bottom:4px">
+            Escribe un criterio y presiona <kbd style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:1px 5px;font-size:0.68rem">Enter</kbd>
+            o <kbd style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:4px;padding:1px 5px;font-size:0.68rem">+</kbd>
+            para agregarlo. El sistema los usará para enriquecer el ranking completo de candidatos.
+          </p>
+          <p style="font-size:0.75rem;color:var(--text-muted);line-height:1.5;margin-bottom:12px">
+            Estos criterios enriquecen el ranking semántico en Cribado Rápido y guían al LLM-juez en Cascada Profunda.
+          </p>
+          <!-- Hidden textareas para el submit del form -->
+          <textarea name="inclusion_criteria" id="inclusion_criteria" style="display:none"></textarea>
+          <textarea name="exclusion_criteria" id="exclusion_criteria" style="display:none"></textarea>
+
+          <div class="criteria-grid">
+            <!-- Inclusión -->
+            <div class="criteria-col">
+              <h4 class="inc"><i class="fas fa-circle-check"></i> Criterios de Inclusión</h4>
+              <div class="tag-input-box inc-box" id="inc-box">
+                <div class="tags-container" id="inc-chips">
+                  <span class="tag-empty-msg" id="inc-empty">Sin criterios añadidos aún…</span>
+                </div>
+                <div class="tag-input-row">
+                  <input type="text" class="tag-text-input" id="inc-input"
+                    placeholder="Ej: Estudios con resultados experimentales"
+                    onkeydown="handleChipKey(event,'inc')">
+                  <button type="button" class="tag-add-btn" onclick="addChip('inc')" title="Agregar criterio">+</button>
+                </div>
+              </div>
+              <p class="criteria-hint"><i class="fas fa-circle-info"></i> Los artículos que cumplan estos criterios serán priorizados en el ranking semántico.</p>
+            </div>
+            <!-- Exclusión -->
+            <div class="criteria-col">
+              <h4 class="exc"><i class="fas fa-circle-xmark"></i> Criterios de Exclusión</h4>
+              <div class="tag-input-box exc-box" id="exc-box">
+                <div class="tags-container" id="exc-chips">
+                  <span class="tag-empty-msg" id="exc-empty">Sin criterios añadidos aún…</span>
+                </div>
+                <div class="tag-input-row">
+                  <input type="text" class="tag-text-input" id="exc-input"
+                    placeholder="Ej: Solo revisión bibliográfica sin experimento"
+                    onkeydown="handleChipKey(event,'exc')">
+                  <button type="button" class="tag-add-btn" onclick="addChip('exc')" title="Agregar criterio">+</button>
+                </div>
+              </div>
+              <p class="criteria-hint"><i class="fas fa-circle-info"></i> Las palabras clave de estos criterios se usarán como malus en el scoring semántico.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Selector de Modo de Cribado (NUEVO) -->
+      <div class="filter-card full" style="border: 2px solid var(--primary-light); background: #f0fdfa; margin-top: 2rem; margin-bottom: 2rem;">
+        <h3 style="color: var(--primary); font-size: 0.95rem; font-weight: 800; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 8px;">
+          <i class="fas fa-microchip"></i> Motor de Cribado PrismaAssistant
+        </h3>
+        <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.4;">
+          Selecciona el nivel de rigor y profundidad para el cribado de los artículos.
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+          <!-- Opción 1: Rápido -->
+          <label style="border: 2.5px solid var(--primary-light); border-radius: 12px; padding: 1.2rem; cursor: pointer; background: var(--primary-bg); display: flex; flex-direction: column; gap: 6px; transition: all 0.25s;" id="mode-standard-label" onclick="selectScreeningMode('standard')">
+            <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.85rem; color: var(--primary);">
+              <input type="radio" name="screening_mode" value="standard" checked style="accent-color: var(--primary); cursor: pointer;">
+              Cribado Rápido (Abstract Rerank)
+            </div>
+            <div style="font-size: 0.7rem; color: var(--text-muted); line-height: 1.4; padding-left: 20px;">
+              Ordena y prioriza los abstracts usando embeddings semánticos. Ideal para una pre-selección rápida y eficiente.
+            </div>
+          </label>
+          <!-- Opción 2: Cascada Profunda -->
+          <label style="border: 1.5px solid var(--border); border-radius: 12px; padding: 1.2rem; cursor: pointer; background: white; display: flex; flex-direction: column; gap: 6px; transition: all 0.25s;" id="mode-cascade-label" onclick="selectScreeningMode('cascade')">
+            <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.85rem; color: var(--text);">
+              <input type="radio" name="screening_mode" value="cascade" style="accent-color: var(--primary); cursor: pointer;">
+              Cascada Profunda (PICO + LLM) <span style="font-size: 0.65rem; background: var(--primary); color: white; padding: 2px 6px; border-radius: 20px; font-weight: 800; margin-left: 4px;">RECOMENDADO</span>
+            </div>
+            <div style="font-size: 0.7rem; color: var(--text-muted); line-height: 1.4; padding-left: 20px;">
+              Cribado con abstract + LLM estricto por criterios PICO y descarga de PDFs inteligente solo para artículos incluidos.
+            </div>
+          </label>
+        </div>
+        <input type="hidden" name="cascade_limit" id="cascade_limit" value="0">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:0.76rem;color:var(--text-muted);">
+          <input type="checkbox" id="cascade-full-audit-checkbox" style="accent-color:var(--primary);" checked disabled>
+          Auditar el ranking completo de candidatos en Cascada Profunda
+        </label>
+        
+        <!-- Umbral de Similitud Slider -->
+        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px dashed #14b8a6; display: none;" id="threshold-container">
+          <label style="display: block; font-weight: 700; font-size: 0.82rem; color: var(--primary); margin-bottom: 6px;">
+            <i class="fas fa-sliders"></i> Umbral de Similitud Semántica (Stage 1): <span id="threshold-val" style="color: var(--accent); font-weight: 800;">0.70</span>
+          </label>
+          <p style="font-size: 0.68rem; color: var(--text-muted); margin-bottom: 8px; line-height: 1.35;">
+            Controla la exigencia del filtro de similitud inicial. Un valor más alto reduce drásticamente el número de artículos enviados al LLM (Stage 4) y evita descargas innecesarias.
+            <br><em>Recomendado: 0.70 - 0.75 para SentenceTransformer/SPECTER; 0.50 - 0.60 para Ollama.</em>
+          </p>
+          <input type="range" name="stage1_threshold" min="0.0" max="1.0" step="0.05" value="0.70" id="threshold-slider" style="width: 100%; accent-color: var(--primary); cursor: pointer;" oninput="document.getElementById('threshold-val').textContent = this.value">
+        </div>
+      </div>
+
+      <!-- Info -->
+      <div class="info-box">
+        <i class="fas fa-circle-info"></i>
+        <p>Al continuar se aplicarán filtros, se eliminarán duplicados y se iniciará el cribado semántico con IA. Tiempo estimado: <strong>2-4 minutos</strong>.</p>
+      </div>
+
+      <!-- Submit -->
+      <button type="submit" id="submit-btn" class="btn-submit">
+        Aplicar Criterios y Continuar
+        <i class="fas fa-arrow-right"></i>
+        <span class="btn-count-text">— <span id="btn-count">{{ total }}</span> artículos</span>
+      </button>
+    </form>
+  </div>
+
+  <script>
+    const CASCADE_MAX_ARTICLES = 0;
+
+    function getScreeningButtonCount() {
+      const finalCount = parseInt(document.getElementById('final-count').textContent || '0', 10);
+      const cascadeSelected = document.querySelector('input[name="screening_mode"][value="cascade"]')?.checked;
+      const fullAudit = document.getElementById('cascade-full-audit-checkbox')?.checked;
+      return cascadeSelected && CASCADE_MAX_ARTICLES > 0 ? Math.min(finalCount, CASCADE_MAX_ARTICLES) : finalCount;
+    }
+
+    function handleCascadeAuditScopeChange() {
+      const hidden = document.getElementById('cascade_limit');
+      if (hidden) hidden.value = String(CASCADE_MAX_ARTICLES);
+      const btnCount = document.getElementById('btn-count');
+      if (btnCount) btnCount.textContent = getScreeningButtonCount();
+    }
+
+    // Selector dinámico de modo de cribado
+    function selectScreeningMode(mode) {
+      const form = document.getElementById('filter-form');
+      const btn = document.getElementById('submit-btn');
+      const standardLabel = document.getElementById('mode-standard-label');
+      const cascadeLabel = document.getElementById('mode-cascade-label');
+      const standardRadio = standardLabel.querySelector('input[type="radio"]');
+      const cascadeRadio = cascadeLabel.querySelector('input[type="radio"]');
+
+      if (mode === 'standard') {
+        form.action = '/apply_filters';
+        standardRadio.checked = true;
+        standardLabel.style.border = '2.5px solid var(--primary-light)';
+        standardLabel.style.background = 'var(--primary-bg)';
+        standardLabel.querySelector('div').style.color = 'var(--primary)';
+        
+        cascadeLabel.style.border = '1.5px solid var(--border)';
+        cascadeLabel.style.background = 'white';
+        cascadeLabel.querySelector('div').style.color = 'var(--text)';
+        
+        btn.innerHTML = 'Aplicar Criterios y Continuar <i class="fas fa-arrow-right"></i> <span class="btn-count-text">— <span id="btn-count">' + document.getElementById('final-count').textContent + '</span> artículos</span>';
+        btn.querySelector('#btn-count').textContent = getScreeningButtonCount();
+        
+        const container = document.getElementById('threshold-container');
+        if (container) container.style.display = 'none';
+      } else {
+        form.action = '/run_cascade_screening';
+        cascadeRadio.checked = true;
+        cascadeLabel.style.border = '2.5px solid var(--primary-light)';
+        cascadeLabel.style.background = 'var(--primary-bg)';
+        cascadeLabel.querySelector('div').style.color = 'var(--primary)';
+        
+        standardLabel.style.border = '1.5px solid var(--border)';
+        standardLabel.style.background = 'white';
+        standardLabel.querySelector('div').style.color = 'var(--text)';
+        
+        btn.innerHTML = 'Iniciar Cribado en Cascada (PICO + LLM) <i class="fas fa-rocket"></i> <span class="btn-count-text">— <span id="btn-count">' + document.getElementById('final-count').textContent + '</span> artículos</span>';
+        btn.querySelector('#btn-count').textContent = getScreeningButtonCount();
+        
+        const container = document.getElementById('threshold-container');
+        if (container) container.style.display = 'block';
+      }
+    }
+  </script>
+
+
+  <script>
+    // ── Year 4-digit enforcement ──
+    function enforceYearLength(input) {
+      const val = String(input.value).replace(/\D/g, '');
+      if (val.length > 4) {
+        input.value = parseInt(val.substring(0, 4));
+      }
+      const errMsg = document.getElementById('year-error-msg');
+      const hasError = val.length > 4;
+      input.classList.toggle('year-error', hasError);
+      if (errMsg) errMsg.style.display = hasError ? 'block' : 'none';
+      handleFilterChange();
+    }
+
+    // ── Criteria panel toggle ──
+    function toggleCriteria() {
+      const body = document.getElementById('criteria-body');
+      const chevron = document.getElementById('criteria-chevron');
+      const isOpen = body.classList.toggle('open');
+      chevron.style.transform = isOpen ? 'rotate(180deg)' : '';
+    }
+
+    // ══════════════════════════════════════════
+    // TAG-CHIP INPUT SYSTEM
+    // ══════════════════════════════════════════
+    const chipState = { inc: [], exc: [] };
+
+    function handleChipKey(e, type) {
+      if (e.key === 'Enter') { e.preventDefault(); addChip(type); }
+    }
+
+    function addChip(type) {
+      const input = document.getElementById(`${type}-input`);
+      const text = input.value.trim();
+      if (!text || chipState[type].includes(text)) { input.value = ''; return; }
+      chipState[type].push(text);
+      input.value = '';
+      renderChips(type);
+      syncHiddenTextarea(type);
+    }
+
+    function removeChip(type, index) {
+      chipState[type].splice(index, 1);
+      renderChips(type);
+      syncHiddenTextarea(type);
+    }
+
+    function renderChips(type) {
+      const container = document.getElementById(`${type}-chips`);
+      const chips = chipState[type];
+
+      // FIX: Eliminar SOLO los .tag-chip — nunca usar innerHTML='' porque
+      // eso desconecta emptyMsg del DOM y getElementById devuelve null despues
+      container.querySelectorAll('.tag-chip').forEach(el => el.remove());
+
+      // emptyMsg siempre permanece en el DOM, solo se muestra/oculta
+      const emptyMsg = container.querySelector('.tag-empty-msg');
+      if (emptyMsg) emptyMsg.style.display = chips.length === 0 ? '' : 'none';
+
+      chips.forEach((text, i) => {
+        const chip = document.createElement('span');
+        chip.className = `tag-chip ${type}`;
+        chip.innerHTML = `<span>${escapeHtml(text)}</span>` +
+          `<button type="button" class="tag-chip-remove" data-type="${type}" data-index="${i}" title="Eliminar">&#x2715;</button>`;
+        // Insertar ANTES del emptyMsg para mantener orden correcto
+        container.insertBefore(chip, emptyMsg || null);
+      });
+
+      // Usar data-attributes en vez de onclick inline para evitar desincronias de indices
+      container.querySelectorAll('.tag-chip-remove').forEach(btn => {
+        btn.onclick = function() {
+          removeChip(this.dataset.type, parseInt(this.dataset.index));
+        };
+      });
+    }
+
+    function syncHiddenTextarea(type) {
+      const ta = document.getElementById(type === 'inc' ? 'inclusion_criteria' : 'exclusion_criteria');
+      ta.value = chipState[type].join('\n');
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // Pre-cargar chips desde sesión si existen
+    (function preloadChips() {
+      const prevInc = {{ (session_inclusion_criteria or '') | tojson }};
+      const prevExc = {{ (session_exclusion_criteria or '') | tojson }};
+      if (prevInc) {
+        prevInc.split('\n').filter(l => l.trim()).forEach(l => { chipState.inc.push(l.trim()); });
+        renderChips('inc'); syncHiddenTextarea('inc');
+      }
+      if (prevExc) {
+        prevExc.split('\n').filter(l => l.trim()).forEach(l => { chipState.exc.push(l.trim()); });
+        renderChips('exc'); syncHiddenTextarea('exc');
+        // Auto-abrir si hay criterios pre-cargados
+        if (chipState.inc.length > 0 || chipState.exc.length > 0) toggleCriteria();
+      }
+    })();
+
+    // ── Chip toggle ──
+    document.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', (event) => {
+        event.preventDefault();
+        const cb = chip.querySelector('input');
+        cb.checked = !cb.checked;
+        chip.classList.toggle('active', cb.checked);
+        handleFilterChange();
+      });
+    });
+
+    function bindLanguageChips(root = document) {
+      root.querySelectorAll('.chip[data-filter="language"]').forEach(chip => {
+        if (chip.dataset.bound === 'true') return;
+        chip.dataset.bound = 'true';
+        chip.addEventListener('click', (event) => {
+          event.preventDefault();
+          const cb = chip.querySelector('input');
+          cb.checked = !cb.checked;
+          chip.classList.toggle('active', cb.checked);
+          handleFilterChange();
+        });
+      });
+    }
+
+    // ── Year / Toggle changes ──
+    document.getElementById('start_year').addEventListener('change', handleFilterChange);
+    document.getElementById('end_year').addEventListener('change', handleFilterChange);
+    document.getElementById('open-access-checkbox').addEventListener('change', handleFilterChange);
+    document.getElementById('academic-quality-checkbox').addEventListener('change', handleFilterChange);
+    
+    // ── Journal checkboxes ──
+    document.querySelectorAll('.journal-item input').forEach(cb => {
+      cb.addEventListener('change', handleFilterChange);
+    });
+
+    function handleFilterChange() {
+      updateFilterCount();
+    }
+
+    async function updateFilterCount() {
+      const form = document.getElementById('filter-form');
+      const fd = new FormData(form);
+
+      const journals = Array.from(form.querySelectorAll('input[name="journals"]:checked')).map(c => c.value);
+      const langs = Array.from(form.querySelectorAll('input[name="languages"]:checked')).map(c => c.value).join(',');
+
+      const data = new FormData();
+      data.append('session_id', fd.get('session_id'));
+      data.append('start_year', fd.get('start_year') || '');
+      data.append('end_year', fd.get('end_year') || '');
+      data.append('journals', JSON.stringify(journals));
+      data.append('languages', langs);
+      data.append('open_access', document.getElementById('open-access-checkbox').checked ? 'true' : 'false');
+      data.append('academic_quality', document.getElementById('academic-quality-checkbox').checked ? 'true' : 'false');
+
+      try {
+        const res = await fetch('/update_filter_count', { method: 'POST', body: data });
+        if (res.ok) {
+          const r = await res.json();
+          const duplicatesCount = Math.max(0, Number(r.duplicates_count || 0));
+          const conceptDiscarded = Math.max(0, Number(r.concept_discarded || 0));
+          const conceptTotal = Math.max(0, Number(r.concept_total || r.unique_records || 0));
+          const recoveredCount = Math.max(0, Number(r.adaptive_graph_recovered_count || 0));
+          
+          // 1. Sincronizar contadores superiores
+          document.getElementById('raw-total').textContent = r.raw_total;
+          document.getElementById('duplicates-count').textContent = duplicatesCount;
+          document.getElementById('concept-discarded-count').textContent = conceptDiscarded;
+          document.getElementById('filtered-count').textContent = r.filtered_count;
+          document.getElementById('final-count').textContent = r.final_count;
+          document.getElementById('btn-count').textContent = r.final_count;
+          document.getElementById('btn-count').textContent = getScreeningButtonCount();
+
+          const statsNote = document.getElementById('stats-note');
+          const poolTotal = document.getElementById('concept-pool-total');
+          const recoveryNote = document.getElementById('graph-recovery-note');
+          if (poolTotal) poolTotal.textContent = conceptTotal;
+          if (statsNote) statsNote.style.display = (conceptTotal > Number(r.raw_total || 0) || recoveredCount > 0) ? '' : 'none';
+          if (recoveryNote) {
+            recoveryNote.textContent = recoveredCount > 0
+              ? `La recuperacion adaptativa agrego ${recoveredCount} vecinos de Semantic Scholar; por eso el pool puede ser mayor que la entrada inicial.`
+              : '';
+          }
+
+          // 2. Sincronizar Diagrama PRISMA (Lógica Estricta)
+          if(document.getElementById('flow-raw')) document.getElementById('flow-raw').textContent = r.raw_total;
+          if(document.getElementById('flow-dupes')) document.getElementById('flow-dupes').textContent = '- ' + duplicatesCount;
+          if(document.getElementById('flow-unique')) document.getElementById('flow-unique').textContent = r.unique_records;
+          if(document.getElementById('flow-discard')) document.getElementById('flow-discard').textContent = '- ' + conceptDiscarded;
+          if(document.getElementById('flow-metadata-discard')) document.getElementById('flow-metadata-discard').textContent = '- ' + r.metadata_discarded;
+          if(document.getElementById('flow-final')) document.getElementById('flow-final').textContent = r.final_count;
+
+          // 3. Actualizar Revistas dinámicamente
+          const languageContainer = document.getElementById('language-list-container');
+          if (languageContainer && r.languages) {
+            const currentLangs = Array.from(languageContainer.querySelectorAll('input:checked')).map(i => i.value);
+            const langSet = new Set(currentLangs);
+            languageContainer.innerHTML = r.languages
+              .filter(lang => lang.count > 0)
+              .map(lang => `
+                <label class="chip ${langSet.has(lang.code) ? 'active' : ''}" data-filter="language" title="${escapeHtml(lang.note || '')}">
+                  <input type="checkbox" name="languages" value="${escapeHtml(lang.code)}" class="language-checkbox" ${langSet.has(lang.code) ? 'checked' : ''}>
+                  <span>${escapeHtml(lang.flag || '')}</span>
+                  ${escapeHtml(lang.name)}
+                  <span class="count">${lang.count}</span>
+                </label>
+              `).join('');
+            bindLanguageChips(languageContainer);
+          }
+
+          const journalContainer = document.getElementById('journal-list-container');
+          const isAcademicOnly = document.getElementById('academic-quality-checkbox').checked;
+
+          if (journalContainer && r.all_journals) {
+            const currentChecked = Array.from(journalContainer.querySelectorAll('input:checked')).map(i => i.value);
+            const checkedSet = new Set(currentChecked);
+            document.getElementById('journals-total-label').textContent = currentChecked.length
+              ? `(${r.total_journals}; ${currentChecked.length} seleccionada${currentChecked.length === 1 ? '' : 's'})`
+              : `(${r.total_journals})`;
+            
+            const visibleJournals = isAcademicOnly 
+                ? r.all_journals.filter(j => j.name !== 'Sin Revista / Otros')
+                : r.all_journals;
+
+            journalContainer.innerHTML = visibleJournals.map(j => `
+              <label class="journal-item">
+                <span class="name" title="${escapeHtml(j.name)}">${escapeHtml(j.name)}</span>
+                <span class="jcount">${j.count}</span>
+                <input type="checkbox" name="journals" value="${escapeHtml(j.name)}" ${checkedSet.has(j.name) ? 'checked' : ''} onchange="handleFilterChange()">
+              </label>
+            `).join('');
+          }
+        }
+      } catch (e) {
+        console.error("Error actualizando filtros:", e);
+      }
+    }
+
+    // 🚨 Block submit if year error 🚨
+    document.getElementById('filter-form').addEventListener('submit', function(e) {
+      const startVal = String(document.getElementById('start_year').value);
+      const endVal = String(document.getElementById('end_year').value);
+      if (startVal.length > 4 || endVal.length > 4) {
+        e.preventDefault();
+        document.getElementById('year-error-msg').style.display = 'block';
+        return;
+      }
+      const btn = document.getElementById('submit-btn');
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando artículos con IA...';
+      btn.disabled = true;
+
+      const selectedJournals = Array.from(this.querySelectorAll('input[name="journals"]:checked')).map(c => c.value);
+      this.querySelectorAll('input[data-journals-payload="true"]').forEach(input => input.remove());
+      this.querySelectorAll('input[name="journals"]').forEach(input => { input.disabled = true; });
+      const journalsInput = document.createElement('input');
+      journalsInput.type = 'hidden';
+      journalsInput.name = 'journals';
+      journalsInput.value = JSON.stringify(selectedJournals);
+      journalsInput.dataset.journalsPayload = 'true';
+      this.appendChild(journalsInput);
+
+      // Generate client_id and add to form
+      const clientId = 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      const hiddenInput = document.createElement('input');
+      hiddenInput.type = 'hidden';
+      hiddenInput.name = 'client_id';
+      hiddenInput.value = clientId;
+      this.appendChild(hiddenInput);
+
+      // Terminal UI
+      const progressBox = document.createElement('div');
+      progressBox.style = "margin-top: 1.5rem; background: #f8fafc; border-radius: 8px; font-family: monospace; font-size: 0.85rem; color: #334155; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border: 1px solid #cbd5e1;";
+      
+      const terminalHeader = document.createElement('div');
+      terminalHeader.style = "background: #e2e8f0; padding: 8px 12px; border-bottom: 1px solid #cbd5e1; display: flex; align-items: center; gap: 8px; color: #475569;";
+      terminalHeader.innerHTML = '<i class="fas fa-terminal"></i><span>Backend Logs</span><span style="margin-left:auto; display:flex; gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#ef4444;"></span><span style="width:10px;height:10px;border-radius:50%;background:#eab308;"></span><span style="width:10px;height:10px;border-radius:50%;background:#22c55e;"></span></span>';
+      
+      const terminalBody = document.createElement('div');
+      terminalBody.id = "progress-terminal";
+      terminalBody.style = "padding: 12px; height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; line-height: 1.4;";
+      terminalBody.innerHTML = '<div><span style="color:#0ea5e9;">➜</span> <span style="color:#64748b;">~</span> Inicializando conexión...</div>';
+      
+      progressBox.appendChild(terminalHeader);
+      progressBox.appendChild(terminalBody);
+      document.querySelector('.content').appendChild(progressBox);
+
+      // SSE Connection
+      const eventSource = new EventSource(`/progress/${clientId}`);
+      
+      eventSource.onmessage = function(event) {
+          if (event.data === "END_STREAM") {
+              eventSource.close();
+              if (Notification.permission === "granted") {
+                  new Notification("Cribado completado", {
+                      body: "Los resultados filtrados están listos para tu revisión.",
+                  });
+              }
+              return;
+          }
+          
+          const line = document.createElement('div');
+          line.innerHTML = `<span style="color:#22c55e;">➜</span> <span style="color:#94a3b8;">~</span> ${event.data}`;
+          terminalBody.appendChild(line);
+          terminalBody.scrollTop = terminalBody.scrollHeight;
+      };
+
+      eventSource.onerror = function() {
+          eventSource.close();
+      };
+    });
+
+    // Send Browser Notification if permitted
+    document.addEventListener('DOMContentLoaded', () => {
+        if (("Notification" in window) && Notification.permission === "granted") {
+            new Notification("Búsqueda Completada", {
+                body: "El sistema finalizó la recopilación inicial de artículos. Ya puedes aplicar tus criterios de cribado."
+            });
+        }
+    });
+  </script>
+
+  <!-- Modal Auditoría -->
+  <div id="auditModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 style="font-size: 1.1rem; font-weight: 800; color: var(--text);">Auditoría de Exclusión PRISMA</h2>
+          <div style="display: flex; align-items: center; gap: 16px; margin-top: 4px;">
+            <p style="font-size: 0.75rem; color: var(--text-muted);">{{ concept_discarded }} artículos descartados por falta de relevancia conceptual.</p>
+            <div style="display: flex; gap: 8px; font-size: 0.6rem; font-weight: 700;">
+              <span style="color: #166534;"><i class="fas fa-check-circle"></i> PRESENTE</span>
+              <span style="color: #991b1b;"><i class="fas fa-times-circle"></i> AUSENTE</span>
+            </div>
+          </div>
+        </div>
+        <button type="button" onclick="closeAuditModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--text-muted);">&times;</button>
+      </div>
+      <div class="modal-body">
+        <table class="audit-table">
+          <thead>
+            <tr>
+              <th style="width: 50%;">Artículo Excluido</th>
+              <th style="width: 15%;">Razón</th>
+              <th style="width: 35%;">Conceptos Detectados</th>
+            </tr>
+          </thead>
+          <tbody id="audit-table-body">
+            <!-- Se llena por JS -->
+          </tbody>
+        </table>
+      </div>
+      <div style="padding: 16px 24px; border-top: 1px solid var(--border); background: #f8fafc; text-align: right; display: flex; justify-content: flex-end; gap: 12px; align-items: center;">
+        <a href="/download_audit_pdf/{{ session_id }}" class="btn-audit-download" style="text-decoration: none; background: #e11d48; font-size: 0.8rem; height: 36px; display: flex; align-items: center; padding: 0 15px;">
+          <i class="fas fa-file-pdf" style="margin-right: 6px;"></i> Descargar PDF de Evidencia
+        </a>
+        <button type="button" onclick="closeAuditModal()" class="btn-submit" style="width: auto; padding: 0 20px; font-size: 0.85rem; height: 36px; margin: 0;">Cerrar Auditoría</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Diagrama PRISMA -->
+  <div id="prismaModal" class="modal">
+    <div class="modal-content" style="width: min(1280px, calc(100vw - 48px)); max-width: calc(100vw - 48px); margin: 24px auto; height: calc(100vh - 48px); display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <div>
+          <h2 style="font-size: 1.1rem; font-weight: 800; color: var(--text);">Flujo de Revisión PRISMA</h2>
+          <p style="font-size: 0.75rem; color: var(--text-muted);">Impacto en tiempo real de los filtros aplicados</p>
+        </div>
+        <button type="button" onclick="closePrismaModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--text-muted);">&times;</button>
+      </div>
+      <div class="modal-body" id="prisma-diagram-container" style="flex: 1; padding: 1rem; display: flex; justify-content: center; align-items: flex-start; overflow: auto; background: #fff;">
+        <div class="loading-indicator">
+          <i class="fas fa-spinner fa-spin"></i> Generando diagrama dinámico...
+        </div>
+      </div>
+      <div style="padding: 16px 24px; border-top: 1px solid var(--border); background: #f8fafc; text-align: right;">
+        <button type="button" onclick="closePrismaModal()" class="btn-submit" style="width: auto; padding: 0 20px; font-size: 0.85rem; height: 36px; margin: 0;">Cerrar Diagrama</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Script Mermaid -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+  <script>
+      mermaid.initialize({ 
+          startOnLoad: false, 
+          theme: 'neutral',
+          securityLevel: 'loose',
+          flowchart: {
+              useMaxWidth: true,
+              htmlLabels: true
+          }
+      });
+  </script>
+
+  <script id="excluded-data" type="application/json">
+    {{ excluded_articles | tojson | safe }}
+  </script>
+
+  <script>
+    const excludedData = JSON.parse(document.getElementById('excluded-data').textContent);
+    const SESSION_ID = "{{ session_id }}";
+    
+    // Configuración inicial de datos para recálculo
+    const initialRawTotal = {{ raw_total }};
+    const initialDuplicatesRemoved = {{ duplicates_removed }};
+    const initialConceptDiscarded = {{ concept_discarded }};
+    const journalCounts = {{ journals | tojson | safe }};
+
+    // Sincronizar eventos con la función central de servidor
+    function openAuditModal() {
+      const modal = document.getElementById('auditModal');
+      if (!modal) return;
+      
+      const tbody = document.getElementById('audit-table-body');
+      if (!tbody) return;
+      
+      tbody.innerHTML = '';
+      
+      if (excludedData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 40px; color: var(--text-muted);">No hay artículos excluidos por el filtro conceptual.</td></tr>';
+      } else {
+        excludedData.forEach(art => {
+          const tr = document.createElement('tr');
+          const matched = art._concepts_matched_list || [];
+          const missing = art._concepts_missing_list || [];
+          
+          let conceptHtml = '<div style="display: flex; flex-wrap: wrap;">';
+          matched.forEach(c => conceptHtml += `<span class="concept-tag yes"><i class="fas fa-check"></i> ${c}</span>`);
+          missing.forEach(c => conceptHtml += `<span class="concept-tag no"><i class="fas fa-times"></i> ${c}</span>`);
+          conceptHtml += '</div>';
+
+          tr.innerHTML = `
+            <td>
+              <div style="font-weight: 700; color: var(--text); margin-bottom: 4px;">${art.title || 'Sin Título'}</div>
+              <div style="font-size: 0.65rem; color: var(--text-muted);">${art.journal || art.venue || 'Fuente desconocida'} (${art.year || 'N/D'})</div>
+              <div style="margin-top: 8px; font-size: 0.7rem; color: #991b1b; background: #fff1f2; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #ef4444;">
+                <strong>Ausente:</strong> ${missing.length > 0 ? missing.join(', ') : 'Varios'}
+              </div>
+            </td>
+            <td style="text-align: center;">
+              <span class="reason-badge">Filtro Temático</span>
+              <div style="font-size: 0.55rem; color: var(--text-muted); margin-top: 4px;">Detectados: ${matched.length}/4</div>
+            </td>
+            <td>${conceptHtml}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+      modal.style.display = 'flex';
+    }
+
+    function closeAuditModal() {
+      const modal = document.getElementById('auditModal');
+      if(modal) modal.style.display = 'none';
+    }
+
+    window.openPrismaModal = async function() {
+      const modal = document.getElementById('prismaModal');
+      const container = document.getElementById('prisma-diagram-container');
+      if (!modal) return;
+
+      modal.style.display = 'flex';
+      container.innerHTML = '<div class="loading-indicator"><i class="fas fa-spinner fa-spin"></i> Generando diagrama dinámico...</div>';
+
+      try {
+          const form = document.getElementById('filter-form');
+          const fd = new FormData(form);
+          const selectedJournals = Array.from(form.querySelectorAll('input[name="journals"]:checked')).map(c => c.value);
+          const selectedLanguages = Array.from(form.querySelectorAll('input[name="languages"]:checked')).map(c => c.value);
+          const params = new URLSearchParams();
+          if (fd.get('start_year')) params.append('start_year', fd.get('start_year'));
+          if (fd.get('end_year')) params.append('end_year', fd.get('end_year'));
+          params.append('journals', JSON.stringify(selectedJournals));
+          params.append('languages', selectedLanguages.join(','));
+          params.append('open_access', document.getElementById('open-access-checkbox').checked ? 'true' : 'false');
+          params.append('academic_quality', document.getElementById('academic-quality-checkbox').checked ? 'true' : 'false');
+
+          const res = await fetch(`/get_prisma_diagram/${SESSION_ID}?${params.toString()}`);
+          if (res.ok) {
+              const data = await res.json();
+              if (data.html) {
+                container.innerHTML = data.html;
+                return;
+              }
+              container.innerHTML = `<div class="mermaid">${data.mermaid}</div>`;
+              try {
+                await mermaid.run({ nodes: [container.querySelector('.mermaid')] });
+                const svg = container.querySelector('svg');
+                if (svg) {
+                  svg.removeAttribute('height');
+                  svg.style.maxWidth = '100%';
+                  svg.style.height = 'auto';
+                }
+              } catch (renderError) {
+                console.error("Error renderizando Mermaid:", renderError);
+                container.innerHTML = '<div style="color:#991b1b; font-size:0.8rem;"><i class="fas fa-exclamation-triangle"></i> Error renderizando el diagrama PRISMA.</div>';
+              }
+          } else {
+              container.innerHTML = '<div style="color:var(--red); font-size:0.8rem;"><i class="fas fa-exclamation-triangle"></i> Error al cargar diagrama.</div>';
+          }
+      } catch (e) {
+          console.error("Error cargando diagrama PRISMA:", e);
+          container.innerHTML = '<div style="color:#991b1b; font-size:0.8rem;"><i class="fas fa-wifi"></i> Error de conexion al solicitar el diagrama.</div>';
+      }
+    }
+
+    window.closePrismaModal = function() {
+      const modal = document.getElementById('prismaModal');
+      if(modal) modal.style.display = 'none';
+    }
+
+    // Cerrar modales al clickear fuera
+    window.onclick = function(event) {
+      if (event.target == document.getElementById('auditModal')) {
+        closeAuditModal();
+      }
+      if (event.target == document.getElementById('prismaModal')) {
+        closePrismaModal();
+      }
+    }
+  </script>
+</body>
+</html>

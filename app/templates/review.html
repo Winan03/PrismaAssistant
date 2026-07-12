@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Revisión Final — PRISMA Assistant</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--primary:#0f766e;--primary-light:#14b8a6;--primary-bg:#f0fdfa;--accent:#1e40af;--bg:#f8fafb;--card:#fff;--text:#1e293b;--text-muted:#64748b;--border:#e2e8f0;--radius:14px;--red:#ef4444;--red-bg:#fef2f2;--green:#10b981;--green-bg:#ecfdf5;--blue:#3b82f6;--blue-bg:#eff6ff;--amber:#f59e0b;--amber-bg:#fffbeb;--purple:#7c3aed}
+    body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+    .navbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 2rem;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+    .navbar-brand{font-weight:800;font-size:1rem;color:var(--primary);display:flex;align-items:center;gap:8px;text-decoration:none}
+    .nav-steps{display:flex;gap:0;list-style:none}
+    .nav-step{display:flex;align-items:center;gap:6px;padding:8px 14px;font-size:0.75rem;font-weight:600;color:var(--text-muted)}
+    .nav-step.active{color:var(--primary)}
+    .nav-step .sn{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:800;background:#f1f5f9;color:var(--text-muted)}
+    .nav-step.done .sn{background:var(--primary);color:#fff}
+    .nav-step.active .sn{background:var(--primary);color:#fff}
+    .nav-step+.nav-step::before{content:'';width:20px;height:2px;background:var(--border);margin-right:6px}
+
+    .content{max-width:900px;margin:0 auto;padding:2rem 1.5rem 3rem}
+    .page-header{text-align:center;padding:2.5rem 0 1.5rem}
+    .page-header h1{font-size:1.6rem;font-weight:800;margin-bottom:0.4rem}
+    .page-header p{color:var(--text-muted);font-size:0.85rem}
+
+    .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem}
+    .stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem;text-align:center}
+    .stat .n{font-size:1.8rem;font-weight:800}
+    .stat .l{font-size:0.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-top:2px}
+    .stat .n.green{color:var(--primary)} .stat .n.red{color:var(--red)} .stat .n.indigo{color:var(--accent)} .stat .n.purple{color:var(--purple)}
+
+    .section-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+    .section-title{font-size:0.9rem;font-weight:700;margin-bottom:1rem;display:flex;align-items:center;gap:8px}
+    .section-title i{color:var(--primary);font-size:0.85rem}
+
+    .export-btns{display:flex;flex-wrap:wrap;gap:8px}
+    .export-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border:1px solid var(--border);border-radius:10px;font-size:0.78rem;font-weight:700;cursor:pointer;background:var(--card);color:var(--text);transition:all 0.15s;font-family:inherit}
+    .export-btn:hover{border-color:var(--primary-light);background:var(--primary-bg);color:var(--primary)}
+    .export-btn i{font-size:0.75rem}
+
+    .article-item{border-left:3px solid var(--green);background:var(--card);border-radius:0 var(--radius) var(--radius) 0;padding:1rem 1.2rem;margin-bottom:10px;transition:box-shadow 0.15s}
+    .article-item:hover{box-shadow:0 2px 10px rgba(0,0,0,0.05)}
+    .article-title{font-size:0.88rem;font-weight:700;margin-bottom:6px;line-height:1.4}
+    .article-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+    .article-source-btn{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;padding:4px 8px;border:1px solid #99f6e4;border-radius:8px;background:#f0fdfa;color:var(--primary);font-size:0.65rem;font-weight:700;text-decoration:none}
+    .article-source-btn:hover{background:#ccfbf1}
+    .authors-full{max-width:100%;line-height:1.35}
+    .article-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:0.72rem;color:var(--text-muted)}
+    .article-meta i{margin-right:2px}
+    .rel-badge{font-size:0.65rem;font-weight:700;padding:3px 8px;border-radius:6px;background:var(--green-bg);color:#065f46;border:1px solid #a7f3d0}
+    .evidence-card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:1.2rem 1.3rem;margin-bottom:1.5rem;box-shadow:0 1px 3px rgba(15,23,42,.04)}
+    .evidence-top{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;margin-bottom:.9rem}
+    .evidence-title{font-weight:800;font-size:1rem;display:flex;align-items:center;gap:8px}
+    .evidence-title i{color:var(--primary)}
+    .evidence-note{font-size:.76rem;color:var(--text-muted);line-height:1.45;margin-top:4px}
+    .evidence-count{font-size:1.55rem;font-weight:800;color:var(--primary);text-align:right}
+    .evidence-count small{display:block;font-size:.62rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-top:2px}
+    .evidence-meter{height:9px;background:#eef2f7;border-radius:999px;overflow:hidden;margin-bottom:1rem}
+    .evidence-meter span{display:block;height:100%;background:linear-gradient(90deg,var(--primary),var(--primary-light));border-radius:999px}
+    .evidence-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1rem}
+    .evidence-kpi{border:1px solid var(--border);border-radius:12px;padding:.75rem .85rem;background:#fbfdff}
+    .evidence-kpi b{display:block;font-size:1.15rem;color:var(--text)}
+    .evidence-kpi span{font-size:.68rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+    .evidence-actions{display:flex;flex-wrap:wrap;gap:8px}
+    .evidence-actions .export-btn{background:#fff}
+    .pdf-badge{font-size:.62rem;font-weight:800;padding:3px 8px;border-radius:999px;border:1px solid var(--border);display:inline-flex;align-items:center;gap:5px;text-transform:uppercase}
+    .pdf-badge.ready{background:var(--green-bg);color:#047857;border-color:#a7f3d0}
+    .pdf-badge.missing{background:var(--amber-bg);color:#b45309;border-color:#fde68a}
+    .pdf-upload-mini{border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:8px;padding:5px 9px;font-size:.66rem;font-weight:800;cursor:pointer}
+    .pdf-upload-mini:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-bg)}
+    .article-item.pdf-missing{border-left-color:var(--amber)}
+
+    .ai-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+    .ai-field{background:var(--bg);border-radius:8px;padding:10px;border:1px solid var(--border)}
+    .ai-field-label{font-size:0.6rem;text-transform:uppercase;font-weight:700;color:var(--text-muted);letter-spacing:0.5px;margin-bottom:4px}
+    .ai-field-value{font-size:0.78rem;color:#475569;line-height:1.5}
+
+    .translation-box{margin-top:8px;padding:8px 12px;background:var(--blue-bg);border-left:3px solid var(--blue);border-radius:0 8px 8px 0;font-size:0.78rem;color:#475569;line-height:1.5}
+
+    .btn-primary{width:100%;padding:16px;border:none;border-radius:var(--radius);background:var(--primary);color:#fff;font-family:inherit;font-size:1rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:all 0.2s}
+    .btn-primary:hover{background:#0d5f58;transform:translateY(-1px);box-shadow:0 6px 20px rgba(15,118,110,0.3)}
+    .btn-primary:disabled{opacity:0.6;cursor:not-allowed;transform:none}
+
+    .modal{display:none;position:fixed;z-index:100;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.4);backdrop-filter:blur(4px)}
+    .modal-content{background:#fff;margin:8% auto;border-radius:16px;width:680px;max-width:92%;max-height:80vh;box-shadow:0 20px 50px rgba(0,0,0,0.15);display:flex;flex-direction:column;overflow:hidden}
+    .modal-header{background:var(--accent);padding:16px 20px;color:#fff;display:flex;justify-content:space-between;align-items:center}
+    .modal-header h3{font-size:0.95rem;font-weight:700;display:flex;align-items:center;gap:8px}
+    .modal-header p{font-size:0.7rem;color:rgba(255,255,255,0.8);margin-top:2px}
+    .modal-body{padding:16px 20px;overflow-y:auto;flex:1;background:var(--bg)}
+    .modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:#fafbfc}
+    .modal-footer button{padding:8px 18px;border-radius:8px;font-weight:700;font-size:0.8rem;cursor:pointer;font-family:inherit;border:none;transition:all 0.15s}
+
+    .missing-pdf-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .missing-pdf-item:hover{border-color:var(--blue)}
+    .status-badge{font-size:0.6rem;font-weight:800;padding:3px 6px;border-radius:4px;text-transform:uppercase}
+
+    @keyframes spin{to{transform:rotate(360deg)}} .fa-spin{animation:spin 1s linear infinite}
+    .hidden{display:none!important}
+    footer{background:var(--card);border-top:1px solid var(--border);padding:1.5rem 2rem;text-align:center;font-size:0.8rem;color:var(--text-muted)} footer strong{color:var(--primary)}
+    .footer-credits{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;margin-top:.6rem;font-size:.65rem}
+    .footer-credits a{color:var(--text-muted);text-decoration:none;transition:color .15s;font-weight:500} .footer-credits a:hover{color:var(--primary)}
+    .footer-credits .sep{color:#ddd} .footer-section-label{font-size:.55rem;text-transform:uppercase;letter-spacing:1px;font-weight:700;color:#cbd5e1;margin:0 4px}
+    @media(max-width:640px){.stats-row{grid-template-columns:1fr 1fr}.ai-fields,.evidence-grid{grid-template-columns:1fr}.evidence-top{flex-direction:column}.nav-steps{display:none}.export-btns{flex-direction:column}}
+  </style>
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="/" class="navbar-brand"><i class="fas fa-flask"></i> PRISMA Assistant</a>
+    <ul class="nav-steps">
+      <li class="nav-step done"><span class="sn">1</span> Búsqueda</li>
+      <li class="nav-step done"><span class="sn">2</span> Filtros</li>
+      <li class="nav-step done"><span class="sn">3</span> Screening</li>
+      <li class="nav-step active"><span class="sn">4</span> Revisión</li>
+    </ul>
+  </nav>
+
+  <div class="content">
+    <header class="page-header">
+      <h1>Revisión Final de Artículos</h1>
+      <p>Verifique los {{ total_included }} artículos seleccionados antes de generar la síntesis</p>
+    </header>
+
+    <div class="stats-row">
+      <div class="stat"><div class="n green">{{ total_included }}</div><div class="l">Incluidos</div></div>
+      <div class="stat"><div class="n red">{{ total_excluded }}</div><div class="l">Excluidos</div></div>
+      <div class="stat"><div class="n indigo">{{ avg_similarity }}%</div><div class="l">Relevancia Prom.</div></div>
+      <div class="stat"><div class="n purple">{{ unique_journals }}</div><div class="l">Revistas</div></div>
+    </div>
+
+    <div class="evidence-card" id="pdfAuditCard">
+      <div class="evidence-top">
+        <div>
+          <div class="evidence-title"><i class="fas fa-file-shield"></i> Estado de evidencia PDF</div>
+          <div class="evidence-note">Antes de generar la sintesis, verifica que los articulos incluidos tengan texto completo. Si falta alguno, puedes subir el PDF desde tu maquina.</div>
+        </div>
+        <div class="evidence-count"><span id="pdfReadyCount">{{ pdf_audit.ready | default(0) }}/{{ pdf_audit.total | default(total_included) }}</span><small>PDFs completos</small></div>
+      </div>
+      <div class="evidence-meter"><span id="pdfReadyMeter" style="width: {{ pdf_audit.ready_pct | default(0) }}%"></span></div>
+      <div class="evidence-grid">
+        <div class="evidence-kpi"><b id="pdfReadyKpi">{{ pdf_audit.ready | default(0) }}</b><span>Listos para RAG</span></div>
+        <div class="evidence-kpi"><b id="pdfMissingKpi">{{ pdf_audit.missing | default(0) }}</b><span>Pendientes</span></div>
+        <div class="evidence-kpi"><b id="pdfUploadedKpi">{{ pdf_audit.uploaded | default(0) }}</b><span>Subidos manualmente</span></div>
+      </div>
+      <div class="evidence-actions">
+        <button onclick="openPdfReview()" class="export-btn"><i class="fas fa-list-check"></i> Revisar o subir faltantes</button>
+        <button onclick="downloadAllPDFs(event)" class="export-btn"><i class="fas fa-cloud-download-alt"></i> Buscar PDFs Open Access</button>
+      </div>
+    </div>
+
+    <!-- Exportar -->
+    <div class="section-card">
+      <div class="section-title"><i class="fas fa-download"></i> Exportar Referencias</div>
+      <div class="export-btns">
+        <button onclick="exportBibTeX()" class="export-btn"><i class="fas fa-file-code"></i> BibTeX</button>
+        <button onclick="exportCSV()" class="export-btn"><i class="fas fa-file-csv"></i> CSV</button>
+        <button onclick="exportRIS()" class="export-btn"><i class="fas fa-file-alt"></i> RIS</button>
+        <button onclick="downloadAllPDFs(event)" class="export-btn"><i class="fas fa-file-pdf"></i> PDFs Open Access</button>
+      </div>
+    </div>
+
+    <!-- Artículos -->
+    <div class="section-card">
+      <div class="section-title"><i class="fas fa-list-check"></i> Artículos Seleccionados ({{ total_included }})</div>
+      {% for article in included_articles %}
+      {% set source_url = article.source_url or article.url or article.pdf_url or article.link %}
+      {% if not source_url and article.doi %}{% set source_url = 'https://doi.org/' ~ article.doi %}{% endif %}
+      <div class="article-item {{ '' if article.pdf_ready else 'pdf-missing' }}" id="article-item-{{ loop.index0 }}">
+        <div class="article-title article-title-row">
+          {% if source_url %}
+          <a href="{{ source_url }}" target="_blank" rel="noopener" style="text-decoration:none;color:var(--text)">
+            {{ loop.index }}. {{ article.title }}
+          </a>
+          <a class="article-source-btn" href="{{ source_url }}" target="_blank" rel="noopener">
+            <i class="fas fa-external-link-alt"></i> Fuente
+          </a>
+          {% else %}
+          <span>{{ loop.index }}. {{ article.title }}</span>
+          {% endif %}
+        </div>
+        <div class="article-meta">
+          <span class="authors-full"><i class="fas fa-users"></i> {{ article.authors_display or (article.authors or [])|join('; ') }}</span>
+          <span>•</span>
+          <span><i class="fas fa-calendar"></i> {{ article.year }}</span>
+          {% if article.journal %}<span>•</span><span><i class="fas fa-book"></i> {{ article.journal }}</span>{% endif %}
+          <span class="rel-badge">{{ ((article.similarity | default(0)) * 100)|int }}%</span>
+          {% if article.evidence_bucket == 'BACKGROUND_ONLY' %}
+          <span class="pdf-badge" style="background:#fff7ed;color:#c2410c;border-color:#fed7aa"><i class="fas fa-circle-info"></i> Revisar a profundidad</span>
+          {% endif %}
+          <span class="pdf-badge {{ 'ready' if article.pdf_ready else 'missing' }}" id="pdf-badge-{{ loop.index0 }}">
+            <i class="fas {{ 'fa-circle-check' if article.pdf_ready else 'fa-triangle-exclamation' }}"></i>
+            {{ article.pdf_status_label | default('Falta PDF completo') }}
+          </span>
+          {% if not article.pdf_ready %}
+          <button class="pdf-upload-mini" id="article-upload-{{ loop.index0 }}" onclick="document.getElementById('article-file-{{ loop.index0 }}').click()">
+            <i class="fas fa-upload"></i> Subir PDF
+          </button>
+          <input type="file" id="article-file-{{ loop.index0 }}" style="display:none" accept="application/pdf" onchange="uploadPdfForArticle({{ loop.index0 }}, this, 'article-item-{{ loop.index0 }}', 'article-upload-{{ loop.index0 }}')">
+          {% endif %}
+        </div>
+
+        {% if article.translation %}
+        <div class="translation-box">
+          <strong style="color:var(--blue);font-size:0.65rem">[ES]</strong> {{ article.translation[:500] }}{{ '...' if article.translation|length > 500 else '' }}
+        </div>
+        {% endif %}
+
+        {% if article.summary or article.methodology or article.population %}
+        <div class="ai-fields">
+          {% if article.summary %}
+          <div class="ai-field"><div class="ai-field-label">📝 Resumen</div><div class="ai-field-value">{{ article.summary }}</div></div>
+          {% endif %}
+          {% if article.methodology %}
+          <div class="ai-field"><div class="ai-field-label">🔬 Metodología</div><div class="ai-field-value">{{ article.methodology }}</div></div>
+          {% endif %}
+          {% if article.population %}
+          <div class="ai-field"><div class="ai-field-label">👥 Población</div><div class="ai-field-value">{{ article.population }}</div></div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        {% if article.researcher_notes %}
+        <div style="margin-top:8px;padding:8px 12px;background:var(--amber-bg);border-left:3px solid var(--amber);border-radius:0 8px 8px 0;font-size:0.75rem;color:#92400e">
+          <i class="fas fa-sticky-note" style="margin-right:4px"></i> {{ article.researcher_notes }}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- CTA Síntesis -->
+    <div class="section-card" style="text-align:center;padding:2rem">
+      <h3 style="font-weight:800;font-size:1.1rem;margin-bottom:0.5rem"><i class="fas fa-rocket" style="color:var(--primary);margin-right:6px"></i> ¿Listo para Generar la Síntesis?</h3>
+      <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1.5rem">Se analizarán los {{ total_included }} artículos seleccionados para crear una síntesis narrativa completa.</p>
+      <button onclick="proceedToSynthesis()" class="btn-primary" style="max-width:400px;margin:0 auto">
+        <i class="fas fa-arrow-right"></i> Generar Síntesis Final
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal Verificación -->
+  <div id="verificationModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h3><i class="fas fa-microscope"></i> Verificación de Evidencia</h3>
+          <p>Sube los PDFs faltantes o confirma que deseas continuar solo con abstracts.</p>
+        </div>
+        <button onclick="closeVerificationModal()" style="background:none;border:none;color:rgba(255,255,255,0.8);cursor:pointer;font-size:1.1rem"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div id="missing-pdfs-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button onclick="closeVerificationModal()" style="background:none;color:var(--text-muted)">Cancelar</button>
+        <button onclick="finalProceed({allowMissing:true})" id="finalProceedBtn" style="background:var(--primary);color:#fff">Continuar sin PDFs faltantes</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div>© 2025 <strong>Universidad Privada Antenor Orrego</strong></div>
+    <div class="footer-credits">
+      <span class="footer-section-label">Datos</span>
+      <a href="https://www.semanticscholar.org/" target="_blank">Semantic Scholar</a><span class="sep">·</span>
+      <a href="https://openalex.org/" target="_blank">OpenAlex</a><span class="sep">·</span>
+      <a href="https://europepmc.org/" target="_blank">Europe PMC</a><span class="sep">·</span>
+      <a href="https://unpaywall.org/" target="_blank">Unpaywall</a><span class="sep">|</span>
+      <span class="footer-section-label">IA</span>
+      <a href="https://ai.google.dev/" target="_blank">Google Gemini</a><span class="sep">·</span>
+      <a href="https://openrouter.ai/" target="_blank">OpenRouter</a><span class="sep">·</span>
+      <a href="https://groq.com/" target="_blank">Groq</a><span class="sep">·</span>
+      <a href="https://cerebras.ai/" target="_blank">Cerebras</a><span class="sep">|</span>
+      <span class="footer-section-label">Infra</span>
+      <a href="https://www.trychroma.com/" target="_blank">ChromaDB</a><span class="sep">·</span>
+      <a href="https://fastapi.tiangolo.com/" target="_blank">FastAPI</a>
+    </div>
+  </footer>
+
+  <!-- DATA -->
+  <script id="included-articles-data" type="application/json">
+{{ included_articles | tojson | safe }}
+  </script>
+
+  <script>
+    const dataElement = document.getElementById('included-articles-data');
+    const articles = dataElement ? JSON.parse(dataElement.textContent.trim()) : [];
+    const sessionId = "{{ session_id }}";
+    const question = "{{ question }}";
+
+    function exportBibTeX() {
+      let bibtex = '';
+      articles.forEach(article => {
+        if (article.bibtex && article.bibtex.trim()) { bibtex += article.bibtex.trim() + '\n\n'; }
+        else {
+          const key = generateBibKey(article);
+          const authorStr = (article.authors || []).join(' and ');
+          const fields = [`  title     = {${escapeBibtex(article.title || '')}}`,`  author    = {${escapeBibtex(authorStr)}}`,`  year      = {${article.year || 'n.d.'}}`];
+          if (article.journal) fields.push(`  journal   = {${escapeBibtex(article.journal)}}`);
+          if (article.volume) fields.push(`  volume    = {${escapeBibtex(article.volume)}}`);
+          if (article.issue) fields.push(`  number    = {${escapeBibtex(article.issue)}}`);
+          if (article.pages) fields.push(`  pages     = {${escapeBibtex(article.pages)}}`);
+          if (article.doi) fields.push(`  doi       = {${article.doi}}`);
+          if (article.url) fields.push(`  url       = {${article.url}}`);
+          bibtex += `@article{${key},\n${fields.join(',\n')}\n}\n\n`;
+        }
+      });
+      downloadFile(bibtex, 'referencias.bib', 'text/plain;charset=utf-8');
+      alert(`✅ BibTeX exportado — ${articles.length} referencias`);
+    }
+
+    function exportCSV() {
+      let csv = 'Title,Authors,Year,Journal,Volume,Issue,Pages,DOI,Relevance,URL,PDF_Link,Notes,Summary,Methodology,Population,Key_Findings,Limitations,Conclusions\n';
+      articles.forEach(article => {
+        const pdfLink = article.url || (article.doi ? `https://doi.org/${article.doi}` : '');
+        csv += [escapeCSV(article.title),escapeCSV((article.authors||[]).join('; ')),article.year,escapeCSV(article.journal||''),escapeCSV(article.volume||''),escapeCSV(article.issue||''),escapeCSV(article.pages||''),article.doi||'',`${(article.similarity*100).toFixed(1)}%`,article.url||'',pdfLink,escapeCSV(article.researcher_notes||''),escapeCSV(article.summary||''),escapeCSV(article.methodology||''),escapeCSV(article.population||''),escapeCSV(article.key_findings||''),escapeCSV(article.limitations||''),escapeCSV(article.conclusions||'')].join(',') + '\n';
+      });
+      downloadFile(csv, 'references_full.csv', 'text/csv');
+      alert('✅ CSV exportado');
+    }
+
+    function exportRIS() {
+      let ris = '';
+      articles.forEach(article => {
+        ris += 'TY  - JOUR\n';
+        ris += `TI  - ${article.title}\n`;
+        (article.authors||[]).forEach(a => { ris += `AU  - ${a}\n`; });
+        ris += `PY  - ${article.year}\n`;
+        ris += `JO  - ${article.journal||'Unknown'}\n`;
+        if (article.volume) ris += `VL  - ${article.volume}\n`;
+        if (article.issue) ris += `IS  - ${article.issue}\n`;
+        if (article.pages) ris += `SP  - ${article.pages}\n`;
+        if (article.issn) ris += `SN  - ${article.issn}\n`;
+        if (article.doi) ris += `DO  - ${article.doi}\n`;
+        if (article.abstract) ris += `AB  - ${article.abstract}\n`;
+        if (article.url) ris += `UR  - ${article.url}\n`;
+        const pdfUrl = article.url||(article.doi?`https://doi.org/${article.doi}`:'');
+        if (pdfUrl) ris += `L1  - ${pdfUrl}\n`;
+        if (article.researcher_notes) ris += `N1  - ${article.researcher_notes}\n`;
+        ris += 'ER  - \n\n';
+      });
+      downloadFile(ris, 'references.ris', 'application/x-research-info-systems');
+      alert('✅ RIS exportado');
+    }
+
+    function generateBibKey(a) {
+      let k = '';
+      if (a.authors?.length) { const p = a.authors[0].split(' '); k += p[p.length-1].replace(/[^a-zA-Z]/g,''); } else k += 'Unknown';
+      k += a.year || '0000';
+      if (a.title) { const w = a.title.split(' ')[0].replace(/[^a-zA-Z]/g,''); if (w) k += '_'+w; }
+      return k;
+    }
+    function escapeBibtex(t) { return t ? t.replace(/\\/g,'\\\\').replace(/{/g,'\\{').replace(/}/g,'\\}').replace(/~/g,'\\~{}').replace(/\^/g,'\\^{}').replace(/#/g,'\\#').replace(/&/g,'\\&').replace(/_/g,'\\_').replace(/%/g,'\\%').replace(/\$/g,'\\$') : ''; }
+    function escapeCSV(t) { if (!t) return '""'; t = String(t); if (t.includes('"')) t = t.replace(/"/g,'""'); if (t.includes(',')||t.includes('"')||t.includes('\n')) t = `"${t}"`; return t; }
+    function downloadFile(c,f,m) { const b=new Blob([c],{type:m}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download=f; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(u); }
+
+    const incompletePdfSources = new Set(['abstract_proxy','abstract_short','manual_pending','failed','none','']);
+    function hasCompletePdf(article) {
+      const source = String(article.full_text_source || article.acquisition_status || '').toLowerCase();
+      return Boolean(article.pdf_ready || (article.is_pdf_downloaded && !incompletePdfSources.has(source)));
+    }
+    function getMissingArticles() { return articles.filter(a => !hasCompletePdf(a)); }
+    function openPdfReview() { showVerificationModal(getMissingArticles()); }
+
+    function refreshPdfAudit() {
+      const ready = articles.filter(hasCompletePdf).length;
+      const total = articles.length;
+      const missing = total - ready;
+      const uploaded = articles.filter(a => String(a.full_text_source || '').toLowerCase() === 'manual_upload').length;
+      const pct = total ? (ready / total) * 100 : 0;
+      document.getElementById('pdfReadyCount').textContent = `${ready}/${total}`;
+      document.getElementById('pdfReadyKpi').textContent = ready;
+      document.getElementById('pdfMissingKpi').textContent = missing;
+      document.getElementById('pdfUploadedKpi').textContent = uploaded;
+      document.getElementById('pdfReadyMeter').style.width = `${pct}%`;
+    }
+
+    function markArticlePdfReady(index) {
+      articles[index].pdf_ready = true;
+      articles[index].is_pdf_downloaded = true;
+      const row = document.getElementById(`article-item-${index}`);
+      const badge = document.getElementById(`pdf-badge-${index}`);
+      const uploadBtn = document.getElementById(`article-upload-${index}`);
+      if (row) row.classList.remove('pdf-missing');
+      if (badge) {
+        badge.className = 'pdf-badge ready';
+        badge.innerHTML = '<i class="fas fa-circle-check"></i> PDF completo';
+      }
+      if (uploadBtn) uploadBtn.remove();
+      refreshPdfAudit();
+    }
+
+    async function proceedToSynthesis() {
+      const missing = getMissingArticles();
+      if (missing.length > 0) { showVerificationModal(missing); return; }
+      await finalProceed({allowMissing:false});
+    }
+
+    function showVerificationModal(missing) {
+      const list = document.getElementById('missing-pdfs-list');
+      list.innerHTML = '';
+      if (!missing.length) {
+        list.innerHTML = '<div class="missing-pdf-item" style="color:#047857;font-weight:700"><i class="fas fa-circle-check"></i> Todos los articulos incluidos tienen PDF completo.</div>';
+        document.getElementById('verificationModal').style.display = 'block';
+        return;
+      }
+      missing.forEach(art => {
+        const index = articles.indexOf(art);
+        const url = art.url || (art.doi ? `https://doi.org/${art.doi}` : '');
+        const item = document.createElement('div');
+        item.className = 'missing-pdf-item'; item.id = `missing-item-${index}`;
+        item.innerHTML = `
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:0.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${art.title}">${art.title}</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+              <span style="font-size:0.6rem;background:var(--red-bg);color:var(--red);padding:2px 6px;border-radius:4px;font-weight:800;text-transform:uppercase">Sin PDF</span>
+              <a href="${url}" target="_blank" style="font-size:0.7rem;color:var(--blue);text-decoration:none"><i class="fas fa-external-link-alt"></i> Fuente</a>
+            </div>
+          </div>
+          <div>
+            <input type="file" id="file-${index}" style="display:none" accept="application/pdf" onchange="uploadPdfForArticle(${index}, this, 'missing-item-${index}', 'btn-upload-${index}')">
+            <button onclick="document.getElementById('file-${index}').click()" id="btn-upload-${index}" class="export-btn" style="padding:6px 12px;font-size:0.7rem"><i class="fas fa-upload"></i> Subir</button>
+          </div>`;
+        list.appendChild(item);
+      });
+      document.getElementById('verificationModal').style.display = 'block';
+    }
+
+    function closeVerificationModal() {
+      document.getElementById('verificationModal').style.display = 'none';
+      const btn = document.querySelector('button[onclick="proceedToSynthesis()"]');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-arrow-right"></i> Generar Síntesis Final'; }
+    }
+
+    async function uploadPdfForArticle(index, fileInput, itemId, buttonId) {
+      const fi = fileInput || document.getElementById(`file-${index}`);
+      const btn = document.getElementById(buttonId);
+      const item = document.getElementById(itemId);
+      if (!fi?.files?.length) return;
+      const fd = new FormData();
+      fd.append('file', fi.files[0]); fd.append('sessionId', sessionId); fd.append('articleIndex', articles[index].original_index ?? index);
+      btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+      try {
+        const res = await fetch('/upload_pdf', { method: 'POST', body: fd });
+        if (res.ok) {
+          const payload = await res.json();
+          articles[index] = {...articles[index], ...(payload.article || {}), pdf_ready: true};
+          markArticlePdfReady(index);
+          if (item && itemId.startsWith('missing-item-')) {
+          item.style.background = 'var(--green-bg)'; item.style.borderColor = '#a7f3d0';
+          item.innerHTML = `<div style="flex:1"><div style="font-weight:700;font-size:0.8rem;color:#065f46">${articles[index].title}</div><div style="font-size:0.6rem;color:#065f46;font-weight:700;margin-top:4px"><i class="fas fa-check-circle"></i> PROCESADO</div></div><div style="color:var(--green);font-size:1.2rem"><i class="fas fa-check-circle"></i></div>`;
+          }
+          if (!getMissingArticles().length) { setTimeout(() => { alert("Todos los PDFs estan listos."); closeVerificationModal(); }, 500); }
+        } else { let payload = {}; try { payload = await res.json(); } catch(e) {} alert(payload.error || 'Error al subir'); btn.disabled = false; btn.innerHTML = '<i class="fas fa-upload"></i> Reintentar'; }
+      } catch (e) { alert('Error: ' + e.message); btn.disabled = false; }
+    }
+
+    async function finalProceed(options = {}) {
+      closeVerificationModal();
+      const mainBtn = document.querySelector('button[onclick="proceedToSynthesis()"]');
+      const modalBtn = document.getElementById('finalProceedBtn');
+      const set = v => {
+        if (mainBtn) { mainBtn.disabled = v; mainBtn.innerHTML = v ? '<i class="fas fa-spinner fa-spin"></i> Generando...' : '<i class="fas fa-arrow-right"></i> Generar Síntesis Final'; }
+        if (modalBtn) { modalBtn.disabled = v; modalBtn.innerHTML = v ? 'Generando...' : 'Continuar sin PDFs faltantes'; }
+      };
+      set(true);
+
+      // Generate client_id
+      const clientId = 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+      // Terminal UI
+      let progressBox = document.getElementById('synthesis-progress-box');
+      if (!progressBox && mainBtn) {
+          progressBox = document.createElement('div');
+          progressBox.id = 'synthesis-progress-box';
+          progressBox.style = "margin-top: 1.5rem; background: #f8fafc; border-radius: 8px; font-family: monospace; font-size: 0.85rem; color: #334155; overflow: hidden; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); width: 100%; text-align: left; border: 1px solid #cbd5e1;";
+          
+          const terminalHeader = document.createElement('div');
+          terminalHeader.style = "background: #e2e8f0; padding: 8px 12px; border-bottom: 1px solid #cbd5e1; display: flex; align-items: center; gap: 8px; color: #475569;";
+          terminalHeader.innerHTML = '<i class="fas fa-terminal"></i><span>Backend Logs</span><span style="margin-left:auto; display:flex; gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:#ef4444;"></span><span style="width:10px;height:10px;border-radius:50%;background:#eab308;"></span><span style="width:10px;height:10px;border-radius:50%;background:#22c55e;"></span></span>';
+          
+          const terminalBody = document.createElement('div');
+          terminalBody.id = "progress-terminal";
+          terminalBody.style = "padding: 12px; height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; line-height: 1.4;";
+          terminalBody.innerHTML = '<div><span style="color:#0ea5e9;">➜</span> <span style="color:#64748b;">~</span> Iniciando generación de síntesis...</div>';
+          
+          progressBox.appendChild(terminalHeader);
+          progressBox.appendChild(terminalBody);
+          mainBtn.parentNode.insertBefore(progressBox, mainBtn.nextSibling);
+      } else if (progressBox) {
+          const terminalBody = progressBox.querySelector('#progress-terminal');
+          terminalBody.innerHTML = '<div><span style="color:#0ea5e9;">➜</span> <span style="color:#64748b;">~</span> Iniciando generación de síntesis...</div>';
+      }
+
+      // SSE Connection
+      const eventSource = new EventSource(`/progress/${clientId}`);
+      
+      eventSource.onmessage = function(event) {
+          if (event.data === "END_STREAM") {
+              eventSource.close();
+              if (("Notification" in window) && Notification.permission === "granted") {
+                  new Notification("Síntesis Generada", {
+                      body: "El reporte final de Prisma Assistant está listo.",
+                  });
+              }
+              return;
+          }
+          if (progressBox) {
+              const terminalBody = progressBox.querySelector('#progress-terminal');
+              const line = document.createElement('div');
+              line.innerHTML = `<span style="color:#0ea5e9;">➜</span> <span style="color:#64748b;">~</span> ${event.data}`;
+              terminalBody.appendChild(line);
+              terminalBody.scrollTop = terminalBody.scrollHeight;
+          }
+      };
+
+      eventSource.onerror = function() {
+          eventSource.close();
+      };
+
+      try {
+        const res = await fetch('/generate_synthesis', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({sessionId,question,client_id: clientId,articles,allow_missing_pdfs: Boolean(options.allowMissing)}) });
+        if (res.ok) { const h = await res.text(); document.open(); document.write(h); document.close(); }
+        else { eventSource.close(); try { const e = await res.json(); alert('Error: '+(e.detail||e.error||'Fallo')); if (e.pdf_audit) refreshPdfAudit(); } catch(e) { alert('Error al generar'); } set(false); }
+      } catch (e) { eventSource.close(); alert('Error: '+e.message); set(false); }
+    }
+
+    async function downloadAllPDFs(event) {
+      if (!confirm(`Descargando ${articles.length} PDFs. Solo Open Access. ¿Continuar?`)) return;
+      const btn = event.currentTarget || event.target; btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Descargando...';
+      let ok = 0, fail = 0;
+      for (let i = 0; i < articles.length; i++) {
+        try {
+          const doi = articles[i].doi; if (!doi) { fail++; continue; }
+          const r = await fetch(`https://api.unpaywall.org/v2/${doi}?email=prisma-assistant@upao.edu.pe`);
+          if (r.ok) { const d = await r.json(); if (d.best_oa_location?.url_for_pdf) { const p = await fetch(d.best_oa_location.url_for_pdf); downloadFile(await p.blob(), `${generateBibKey(articles[i])}.pdf`, 'application/pdf'); ok++; await new Promise(r => setTimeout(r, 1000)); } else fail++; } else fail++;
+        } catch (e) { fail++; }
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${i+1}/${articles.length}`;
+      }
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-file-pdf"></i> PDFs Open Access';
+      alert(`✅ Descargados: ${ok} | No disponibles: ${fail}`);
+    }
+    refreshPdfAudit();
+  </script>
+</body>
+</html>

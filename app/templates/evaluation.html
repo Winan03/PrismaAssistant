@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Evaluacion interna - PRISMA Assistant</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --primary: #0f766e;
+      --accent: #1e40af;
+      --bg: #f8fafb;
+      --card: #fff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --danger: #b91c1c;
+      --warn: #b45309;
+      --ok: #047857;
+    }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .navbar {
+      height: 64px;
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+    }
+    .brand {
+      color: var(--primary);
+      font-weight: 800;
+      text-decoration: none;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    main {
+      max-width: 1320px;
+      margin: 2rem auto 4rem;
+      padding: 0 1.25rem;
+    }
+    .hero {
+      margin-bottom: 1.4rem;
+    }
+    .hero.hero-result {
+      margin-bottom: 0.9rem;
+    }
+    .hero h1 {
+      margin: 0 0 0.5rem;
+      font-size: clamp(1.7rem, 3vw, 2.4rem);
+    }
+    .hero.hero-result h1 {
+      font-size: clamp(1.45rem, 2.2vw, 1.9rem);
+    }
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 780px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(320px, 0.85fr) minmax(420px, 1.15fr);
+      gap: 1rem;
+      align-items: start;
+    }
+    .grid.has-result {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .grid.has-result .result-card { order: 1; }
+    .grid.has-result .config-card { order: 2; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+      padding: 1.25rem;
+    }
+    .config-card {
+      padding: 0;
+      overflow: hidden;
+    }
+    .config-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.25rem;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 800;
+      list-style: none;
+    }
+    .config-summary::-webkit-details-marker { display: none; }
+    .config-summary i { margin-right: 8px; }
+    .config-summary-hint {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .config-body {
+      padding: 0 1.25rem 1.25rem;
+      border-top: 1px solid var(--border);
+    }
+    .card h2 {
+      margin: 0 0 1rem;
+      font-size: 1rem;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    label {
+      display: block;
+      font-weight: 700;
+      font-size: 0.8rem;
+      margin: 0.85rem 0 0.4rem;
+    }
+    textarea, select, input[type="text"], input[type="number"], input[type="file"] {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.75rem;
+      font: inherit;
+      color: var(--text);
+      background: #fff;
+    }
+    textarea { min-height: 96px; resize: vertical; line-height: 1.5; }
+    .row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.8rem;
+    }
+    .checkbox {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 0.85rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .checkbox input { width: auto; }
+    .btn {
+      width: 100%;
+      margin-top: 1rem;
+      border: 0;
+      border-radius: 12px;
+      padding: 0.9rem 1rem;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .note, .error {
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
+      font-size: 0.85rem;
+      line-height: 1.45;
+    }
+    .note { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .error { background: #fef2f2; color: var(--danger); border: 1px solid #fecaca; margin-bottom: 1rem; }
+    .metrics {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    .metrics th, .metrics td {
+      padding: 0.65rem;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    .metrics th { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.7rem;
+      margin-bottom: 1rem;
+    }
+    .stat {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.75rem;
+      background: #f8fafc;
+    }
+    .stat strong { display: block; font-size: 1.25rem; }
+    .stat span { color: var(--muted); font-size: 0.72rem; }
+    .final-kpis {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.7rem;
+      margin: 0.85rem 0 1rem;
+    }
+    .score-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.85rem;
+      background: #fff;
+    }
+    .score-card strong {
+      display: block;
+      font-size: 1.55rem;
+      line-height: 1;
+      margin-bottom: 0.35rem;
+    }
+    .score-card span {
+      color: var(--muted);
+      font-size: 0.74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .result-shot-grid {
+      display: grid;
+      grid-template-columns: minmax(420px, 0.95fr) minmax(520px, 1.05fr);
+      gap: 1rem;
+      align-items: start;
+    }
+    .matrix-wrap {
+      margin-top: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+      padding: 1rem;
+    }
+    .matrix-caption {
+      font-weight: 800;
+      font-size: 1rem;
+      margin-bottom: 0.25rem;
+    }
+    .matrix-subtitle {
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-bottom: 0.85rem;
+    }
+    .confusion-matrix {
+      display: grid;
+      grid-template-columns: 128px repeat(2, minmax(155px, 1fr));
+      gap: 0;
+      align-items: stretch;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .matrix-corner, .matrix-super-head, .matrix-axis-title, .matrix-head, .matrix-axis, .matrix-cell {
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 0.8rem;
+    }
+    .matrix-corner, .matrix-axis-title, .matrix-head, .matrix-axis {
+      background: #f8fafc;
+      color: var(--muted);
+      font-weight: 800;
+    }
+    .matrix-super-head {
+      grid-column: 2 / 4;
+      text-align: center;
+      background: #eef6ff;
+      color: #1e40af;
+      font-size: 0.78rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .matrix-corner { background: #fff; }
+    .matrix-axis-title, .matrix-head, .matrix-axis {
+      font-size: 0.76rem;
+    }
+    .matrix-cell strong {
+      display: block;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+    .matrix-cell span {
+      display: block;
+      font-size: 2rem;
+      line-height: 1.1;
+      font-weight: 800;
+    }
+    .matrix-cell small {
+      display: block;
+      margin-top: 0.35rem;
+      color: var(--muted);
+      font-size: 0.68rem;
+      font-weight: 700;
+    }
+    .matrix-col-end { border-right: 0; }
+    .matrix-row-end { border-bottom: 0; }
+    .matrix-cell.good { border-color: #a7f3d0; background: #ecfdf5; }
+    .matrix-cell.problem { border-color: #fecaca; background: #fef2f2; }
+    .matrix-cell.warn-cell { border-color: #fed7aa; background: #fff7ed; }
+    .section-title {
+      margin: 1rem 0 0.55rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .timing-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.65rem;
+      font-size: 0.78rem;
+    }
+    .timing-table th, .timing-table td {
+      border-bottom: 1px solid var(--border);
+      padding: 0.55rem 0.35rem;
+      text-align: left;
+    }
+    .timing-table th {
+      color: var(--muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .ok { color: var(--ok); }
+    .bad { color: var(--danger); }
+    .warn { color: var(--warn); }
+    .split {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .list {
+      max-height: 340px;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.6rem;
+      background: #fff;
+    }
+    .item {
+      padding: 0.65rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+    .item:last-child { border-bottom: 0; }
+    .item strong { display: block; color: var(--text); margin-bottom: 0.25rem; }
+    .muted { color: var(--muted); }
+    .preview {
+      margin-top: 1rem;
+      padding: 0.9rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #f8fafc;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .details-panel summary {
+      cursor: pointer;
+      color: var(--text);
+      font-weight: 800;
+    }
+    .details-panel summary::marker {
+      color: var(--muted);
+    }
+    @media (max-width: 920px) {
+      .grid, .split, .result-shot-grid { grid-template-columns: 1fr; }
+      .stat-grid, .final-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+      .confusion-matrix { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <a class="brand" href="/"><i class="fas fa-flask"></i> PRISMA Assistant</a>
+    <span class="muted">Modo privado de tesis</span>
+  </nav>
+
+  <main>
+    <section class="hero {% if result %}hero-result{% endif %}">
+      <h1>Evaluacion interna con Gold Standard</h1>
+      <p>Esta pantalla no aparece en el flujo publico. Sirve para cargar un CSV etiquetado, ejecutar el cribado y calcular matriz de confusion, precision, recall, F1 y tiempos.</p>
+    </section>
+
+    {% if error %}
+      <div class="error"><i class="fas fa-triangle-exclamation"></i> {{ error }}</div>
+    {% endif %}
+
+    <section class="grid {% if result %}has-result{% endif %}">
+      <details class="card config-card" {% if not result %}open{% endif %}>
+        <summary class="config-summary">
+          <span><i class="fas fa-lock"></i> Configuracion privada</span>
+          <span class="config-summary-hint">{% if result %}Abrir parametros{% else %}Parametros de evaluacion{% endif %}</span>
+        </summary>
+      <form class="config-body" action="/internal/evaluate_gold" method="post" enctype="multipart/form-data">
+        <input type="hidden" name="token" value="{{ token }}">
+        <div class="note">El modelo no recibe la columna del gold standard. Las etiquetas se usan solo al final para medir resultados.</div>
+
+        <label>Pregunta de investigacion</label>
+        <textarea name="question" required>{{ form.get("question", "") }}</textarea>
+
+        <label>Criterios de inclusion</label>
+        <textarea name="inclusion_criteria">{{ form.get("inclusion_criteria", "") }}</textarea>
+
+        <label>Criterios de exclusion</label>
+        <textarea name="exclusion_criteria">{{ form.get("exclusion_criteria", "") }}</textarea>
+
+        <div class="row">
+          <div>
+            <label>Año inicial</label>
+            <input type="number" name="start_year" value="{{ form.get("start_year", "") }}" min="1900" max="2100">
+          </div>
+          <div>
+            <label>Año final</label>
+            <input type="number" name="end_year" value="{{ form.get("end_year", "") }}" min="1900" max="2100">
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Umbral Stage 1</label>
+            <input type="text" name="stage1_threshold" value="{{ form.get("stage1_threshold", "0.45") }}">
+          </div>
+          <div>
+            <label>Limite de cascada</label>
+            <input type="number" name="cascade_limit" value="{{ form.get("cascade_limit", "0") }}" min="0">
+          </div>
+        </div>
+
+        <label>Modelo Stage 4</label>
+        <select name="stage4_model">
+          {% set selected_model = form.get("stage4_model", "") %}
+          {% for model in stage4_model_choices %}
+            <option value="{{ model }}" {% if selected_model == model or (not selected_model and loop.first) %}selected{% endif %}>{{ model }}</option>
+          {% endfor %}
+        </select>
+
+        <label class="checkbox">
+          <input type="checkbox" name="compare_stage4_models" value="true" {% if form.get("compare_stage4_models") == "true" %}checked{% endif %}>
+          Comparar Gemma 3 vs Gemma 4 en Stage 4
+        </label>
+
+        <label>Fuente de texto Stage 4</label>
+        <select name="text_source_mode">
+          {% set text_mode = form.get("text_source_mode", "abstract") %}
+          <option value="abstract" {% if text_mode == "abstract" %}selected{% endif %}>Abstract del CSV</option>
+          <option value="local_pdf" {% if text_mode == "local_pdf" or form.get("use_local_pdfs") == "true" %}selected{% endif %}>PDF local de Zotero</option>
+          <option value="unpaywall" {% if text_mode == "unpaywall" %}selected{% endif %}>Unpaywall + abstract</option>
+          <option value="system_cascade" {% if text_mode == "system_cascade" %}selected{% endif %}>Cascada completa del sistema (lento)</option>
+        </select>
+
+        <label>Columna de etiqueta manual (opcional)</label>
+        <input type="text" name="label_column" value="{{ form.get("label_column", "") }}" placeholder="manual_decision, Inclusion manual, gold_label">
+
+        <label>Valores positivos</label>
+        <input type="text" name="positive_values" value="{{ form.get("positive_values", "1,include,included,si,yes,relevant") }}">
+
+        <label>CSV Gold Standard</label>
+        <input type="file" name="gold_csv" accept=".csv,text/csv" required>
+
+        <label class="checkbox">
+          <input type="checkbox" name="academic_quality" value="true" {% if form.get("academic_quality") == "true" %}checked{% endif %}>
+          Filtrar solo registros con calidad academica
+        </label>
+
+        <label class="checkbox" style="background:#fff3cd;border:2px solid #f59e0b;padding:8px 12px;border-radius:8px;">
+          <input type="checkbox" name="skip_concept_filter" value="true" {% if form.get("skip_concept_filter") == "true" %}checked{% endif %}>
+          Saltar filtro conceptual PICO (recomendado para evaluar Stage 4 directamente)
+        </label>
+
+        <button class="btn" type="submit"><i class="fas fa-play"></i> Ejecutar evaluacion</button>
+      </form>
+      </details>
+
+      <section class="card result-card">
+        <h2><i class="fas fa-chart-simple"></i> Resultados</h2>
+        {% if not result %}
+          <p class="muted">Sube el CSV privado para ver aqui la matriz de confusion, metricas y discrepancias.</p>
+        {% else %}
+          <div class="stat-grid">
+            <div class="stat"><strong>{{ result.counts.gold_total }}</strong><span>Total gold</span></div>
+            <div class="stat"><strong>{{ result.counts.gold_positive }}</strong><span>Incluidos manuales</span></div>
+            <div class="stat"><strong>{{ result.counts.stage4_included }}</strong><span>Incluidos por IA</span></div>
+            <div class="stat"><strong>{{ result.timings.total }}s</strong><span>Tiempo total</span></div>
+          </div>
+
+          <div class="preview">
+            <strong>Modelos:</strong>
+            Stage 4={{ result.model_config.stage4_model }};
+            Embeddings={{ result.model_config.embedding_model }};
+            Texto={{ result.model_config.text_source }}.
+          </div>
+
+          {% if result.counts.metadata_candidates < result.counts.gold_total %}
+            <div class="preview">
+              <strong>Filtro de metadatos activo:</strong>
+              {{ result.counts.metadata_candidates }}/{{ result.counts.gold_total }} articulos entraron al pipeline.
+              Relevantes manuales dentro del filtro: {{ result.counts.metadata_gold_positive }}/{{ result.counts.gold_positive }}.
+            </div>
+          {% endif %}
+
+          <div class="final-kpis">
+            <div class="score-card">
+              <strong class="ok">{{ result.final_metrics.recall }}</strong>
+              <span>Recall final</span>
+            </div>
+            <div class="score-card">
+              <strong class="{% if result.final_metrics.precision >= 0.8 %}ok{% elif result.final_metrics.precision >= 0.6 %}warn{% else %}bad{% endif %}">{{ result.final_metrics.precision }}</strong>
+              <span>Precisión final</span>
+            </div>
+            <div class="score-card">
+              <strong>{{ result.final_metrics.f1 }}</strong>
+              <span>F1 final</span>
+            </div>
+            <div class="score-card">
+              <strong>{{ result.llm_summary.average }}s</strong>
+              <span>Promedio LLM</span>
+            </div>
+          </div>
+
+          <div class="result-shot-grid">
+            <div>
+          <div class="matrix-wrap">
+            <div class="matrix-caption">Matriz de confusión final</div>
+            <div class="matrix-subtitle">Filas = gold standard; columnas = decisión de la IA · {{ result.selected_stage4_model }} sobre {{ result.counts.gold_total }} artículos</div>
+            <div class="confusion-matrix">
+              <div class="matrix-corner"></div>
+              <div class="matrix-super-head matrix-col-end">Predicción de la IA</div>
+              <div class="matrix-axis-title">Valor real</div>
+              <div class="matrix-head">IA incluye</div>
+              <div class="matrix-head matrix-col-end">IA excluye</div>
+              <div class="matrix-axis">Gold relevante</div>
+              <div class="matrix-cell good"><strong>Verdadero positivo</strong><span class="ok">{{ result.confusion.tp }}</span><small>Gold=1 · IA incluye</small></div>
+              <div class="matrix-cell warn-cell matrix-col-end"><strong>Falso negativo</strong><span class="warn">{{ result.confusion.fn }}</span><small>Gold=1 · IA excluye</small></div>
+              <div class="matrix-axis matrix-row-end">Gold no relevante</div>
+              <div class="matrix-cell problem matrix-row-end"><strong>Falso positivo</strong><span class="bad">{{ result.confusion.fp }}</span><small>Gold=0 · IA incluye</small></div>
+              <div class="matrix-cell good matrix-col-end matrix-row-end"><strong>Verdadero negativo</strong><span class="ok">{{ result.confusion.tn }}</span><small>Gold=0 · IA excluye</small></div>
+            </div>
+          </div>
+            </div>
+            <div>
+
+          {% if result.model_runs|length > 1 %}
+            <div class="section-title">Comparacion de modelos</div>
+            <table class="metrics">
+              <thead>
+                <tr>
+                  <th>Modelo</th><th>Incluidos</th><th>Precisión</th><th>Recall</th><th>F1</th><th>VP</th><th>FP</th><th>VN</th><th>FN</th><th>Prom. LLM</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for run in result.model_runs %}
+                  <tr>
+                    <td>{{ run.model }}</td>
+                    <td>{{ run.included }}</td>
+                    <td>{{ run.precision }}</td>
+                    <td>{{ run.recall }}</td>
+                    <td>{{ run.f1 }}</td>
+                    <td class="ok">{{ run.tp }}</td>
+                    <td class="bad">{{ run.fp }}</td>
+                    <td class="ok">{{ run.tn }}</td>
+                    <td class="warn">{{ run.fn }}</td>
+                    <td>{{ run.avg_llm_seconds }}s</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          {% endif %}
+
+          <div class="section-title">Detalle por etapa</div>
+          <table class="metrics">
+            <thead>
+              <tr>
+                <th>Etapa</th><th>Precisión</th><th>Recall</th><th>F1</th><th>Exactitud</th><th>VP</th><th>FP</th><th>VN</th><th>FN</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in result.metrics %}
+                <tr>
+                  <td>{{ row.stage }}</td>
+                  <td>{{ row.precision }}</td>
+                  <td>{{ row.recall }}</td>
+                  <td>{{ row.f1 }}</td>
+                  <td>{{ row.accuracy }}</td>
+                  <td class="ok">{{ row.tp }}</td>
+                  <td class="bad">{{ row.fp }}</td>
+                  <td class="ok">{{ row.tn }}</td>
+                  <td class="warn">{{ row.fn }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          <div class="preview">
+            <strong>Procesamiento:</strong>
+            {{ result.counts.metadata_candidates }} pasaron metadatos,
+            {{ result.counts.concept_candidates }} pasaron conceptos,
+            {{ result.counts.cascade_candidates_evaluated }} fueron evaluados en cascada,
+            {{ result.counts.stage4_excluded }} excluidos por Stage 4.
+            {% if result.counts.local_pdf_texts > 0 %}
+              PDFs locales usados: {{ result.counts.local_pdf_texts }}.
+            {% endif %}
+            {% if result.counts.system_cascade_texts > 0 %}
+              Textos por cascada del sistema: {{ result.counts.system_cascade_texts }}.
+            {% endif %}
+          </div>
+            </div>
+          </div>
+
+          <details class="preview details-panel">
+            <summary>Tiempos por fase</summary>
+            <div class="muted">
+              LLM={{ result.time_summary.llm_seconds }}s ({{ result.time_summary.llm_share }}% del total);
+              preparacion={{ result.time_summary.prep_seconds }}s ({{ result.time_summary.prep_share }}%);
+              texto Stage 4 promedio={{ result.counts.stage4_text_avg_chars }} chars,
+              limite={{ result.counts.stage4_text_limit_chars }} chars.
+            </div>
+            <table class="timing-table">
+              <thead>
+                <tr><th>Fase</th><th>Segundos</th><th>Detalle</th></tr>
+              </thead>
+              <tbody>
+                {% for row in result.timing_details %}
+                  <tr>
+                    <td>{{ row.stage }}</td>
+                    <td>{{ row.seconds }}</td>
+                    <td>{{ row.detail }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </details>
+
+          {% if preview %}
+            <details class="preview details-panel">
+              <summary>CSV procesado</summary>
+              <div><strong>CSV:</strong> {{ preview.total_rows }} filas validas. Columnas usadas: {{ preview.mapping }}</div>
+              {% if preview.label_counts %}<div><strong>Etiquetas:</strong> {{ preview.label_counts }}</div>{% endif %}
+            </details>
+          {% endif %}
+        {% endif %}
+      </section>
+    </section>
+
+    {% if result %}
+      <section class="split">
+        <div class="card">
+          <h2><i class="fas fa-circle-xmark bad"></i> Falsos positivos</h2>
+          <div class="list">
+            {% for item in result.false_positives %}
+              <div class="item">
+                <strong>{{ item.title }}</strong>
+                <span class="muted">{{ item.year }} · {{ item.doi }}</span><br>
+                {{ item.reason }}
+              </div>
+            {% else %}
+              <div class="item muted">No se detectaron falsos positivos.</div>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="card">
+          <h2><i class="fas fa-circle-exclamation warn"></i> Falsos negativos</h2>
+          <div class="list">
+            {% for item in result.false_negatives %}
+              <div class="item">
+                <strong>{{ item.title }}</strong>
+                <span class="muted">{{ item.year }} · {{ item.doi }}</span><br>
+                {{ item.reason }}
+              </div>
+            {% else %}
+              <div class="item muted">No se detectaron falsos negativos.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>

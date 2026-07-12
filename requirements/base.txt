@@ -1,0 +1,64 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# HTTP
+httpx>=0.28.1,<1.0.0
+httpcore>=1.0.5,<1.1.0
+
+# NumPy
+numpy==1.26.4
+
+# PyTorch
+torch==2.2.2+cpu
+torchvision==0.17.2+cpu
+
+# Transformers & ML
+transformers==4.45.0
+accelerate==0.34.0
+sentence-transformers==3.0.1
+
+# Core Web
+fastapi==0.111.0
+uvicorn==0.30.1
+jinja2==3.1.4
+
+# Utils
+requests==2.32.3
+python-dotenv==1.0.1
+pandas==2.2.2
+openai==1.35.3
+fuzzywuzzy==0.18.0
+python-levenshtein==0.25.1
+
+# PDF & Documents
+pdfplumber==0.11.0
+reportlab==4.2.2
+fpdf2>=2.7.9
+pillow>=10.0
+
+# Databases
+pymongo==4.8.0
+chromadb==0.4.24
+pymilvus==2.4.4
+
+# APIs & Academic
+semanticscholar==0.9.0
+habanero==1.2.0
+biopython==1.81
+google-genai>=1.52.0
+
+# Visualization
+plotly==5.22.0
+matplotlib>=3.8
+
+# Retrieval
+rank-bm25>=0.2.2
+
+# Config
+marshmallow==3.21.3
+environs==9.5.0
+
+# LLamaIndex
+llama-index-core>=0.14.0
+llama-index-embeddings-huggingface>=0.6.0
+llama-index-llms-ollama>=0.9.0
+llama-index-llms-huggingface>=0.6.0
