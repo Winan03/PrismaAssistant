@@ -306,8 +306,8 @@
         let decisions = new Set();
         const PAGE_SIZE = 15;
         let visibleCount = 0;
-        const SESSION_ID = "{{ session_id }}";
-        const RESEARCH_QUESTION = "{{ question }}";
+        const SESSION_ID = {{ session_id | tojson | safe }};
+        const RESEARCH_QUESTION = {{ question | tojson | safe }};
         const CASCADE_STATUS_URL = `/cascade_status/${SESSION_ID}`;
         let cascadePollTimer = null;
         let cascadeFilterEnabled = false;

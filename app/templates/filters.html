@@ -1204,7 +1204,7 @@
 
   <script>
     const excludedData = JSON.parse(document.getElementById('excluded-data').textContent);
-    const SESSION_ID = "{{ session_id }}";
+    const SESSION_ID = {{ session_id | tojson | safe }};
     
     // Configuración inicial de datos para recálculo
     const initialRawTotal = {{ raw_total }};

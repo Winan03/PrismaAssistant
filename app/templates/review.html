@@ -288,8 +288,8 @@
   <script>
     const dataElement = document.getElementById('included-articles-data');
     const articles = dataElement ? JSON.parse(dataElement.textContent.trim()) : [];
-    const sessionId = "{{ session_id }}";
-    const question = "{{ question }}";
+    const sessionId = {{ session_id | tojson | safe }};
+    const question = {{ question | tojson | safe }};
 
     function exportBibTeX() {
       let bibtex = '';
